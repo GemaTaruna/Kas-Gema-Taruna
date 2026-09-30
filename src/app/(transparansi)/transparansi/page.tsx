@@ -2,7 +2,11 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ANGKATAN_LIST, useAngkatan } from '@/context/AngkatanContext';
+import {
+  ANGKATAN_LIST,
+  SECTION_NAMES,
+  useAngkatan,
+} from '@/context/AngkatanContext';
 import { formatRupiah } from '@/lib/utils';
 
 export default function TransparansiSiswaPage() {
@@ -12,6 +16,9 @@ export default function TransparansiSiswaPage() {
     setActiveAngkatan,
     members,
     transactions,
+    sessions,
+    activeSessionId,
+    setActiveSessionId,
     totalPemasukan,
     totalPengeluaran,
     saldoAkhir,
@@ -23,7 +30,9 @@ export default function TransparansiSiswaPage() {
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [activeView, setActiveView] = useState<'semua' | 'iuran' | 'mutasi'>('semua');
 
-  const lunasCount = members.filter((m) => m.duesStatus === 'LUNAS').length;
+  const lunasCount = members.filter((m) =>
+    (m.paidSessions || []).includes(activeSessionId)
+  ).length;
   const belumCount = members.length - lunasCount;
   const kepatuhanPersen =
     members.length > 0 ? Math.round((lunasCount / members.length) * 100) : 0;
@@ -31,8 +40,10 @@ export default function TransparansiSiswaPage() {
   const filteredMembers = members.filter((m) => {
     const matchName =
       m.fullName.toLowerCase().includes(searchMember.toLowerCase()) ||
-      m.memberCode.toLowerCase().includes(searchMember.toLowerCase());
-    const matchSec = sectionFilter === 'ALL' || m.section === sectionFilter;
+      m.memberCode.toLowerCase().includes(searchMember.toLowerCase()) ||
+      (m.kelas || '').toLowerCase().includes(searchMember.toLowerCase());
+    const matchSec =
+      sectionFilter === 'ALL' || m.section.toUpperCase() === sectionFilter;
     return matchName && matchSec;
   });
 
@@ -44,51 +55,46 @@ export default function TransparansiSiswaPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
-      {/* Header Responsif Web PC & Web Mobile (Tanpa Nama Dummy) */}
+      {/* Header Responsif Web PC & Web Mobile */}
       <header className="sticky top-0 z-40 bg-[#131b2e] text-white border-b border-amber-500/30 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
             <img
               src="/logo.png"
               alt="Logo Gema Taruna"
-              className="w-10 h-10 rounded-xl object-contain bg-white/10 p-1 border border-amber-400/30 shrink-0"
+              className="w-9 h-9 rounded-xl object-contain bg-white/10 p-1 border border-amber-400/30 shrink-0"
             />
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm sm:text-base font-extrabold tracking-tight text-white">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs sm:text-base font-extrabold tracking-tight text-white">
                   KAS GEMA TARUNA
                 </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[11px] font-extrabold">
-                  ANGKATAN {activeAngkatan} (MB{activeAngkatan})
-                </span>
-                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[11px] font-semibold">
-                  🔒 Mode Hanya Membaca
+                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] sm:text-[11px] font-extrabold">
+                  ANGKATAN {activeAngkatan}
                 </span>
               </div>
-              <p className="text-xs text-slate-300 truncate">
-                Portal Transparansi Kas Siswa & Anggota — Tanpa Login
+              <p className="text-[11px] text-slate-300 truncate">
+                Portal Cek Kas Siswa (Mode Hanya Membaca)
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleExit}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[18px]">logout</span>
-              <span>Keluar / Menu Login</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleExit}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition cursor-pointer shrink-0"
+          >
+            <span className="material-symbols-outlined text-[16px]">logout</span>
+            <span>Keluar</span>
+          </button>
         </div>
 
         {/* Bar Pemilih Angkatan (16 s.d. 21) */}
         <div className="bg-slate-900/90 border-t border-white/10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 mr-1 shrink-0">
-                Pilih Angkatan:
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 mr-1 shrink-0">
+                Angkatan:
               </span>
               {ANGKATAN_LIST.map((angk) => {
                 const active = activeAngkatan === angk;
@@ -97,13 +103,13 @@ export default function TransparansiSiswaPage() {
                     key={angk}
                     type="button"
                     onClick={() => setActiveAngkatan(angk)}
-                    className={`px-3 py-1 rounded-lg text-xs font-extrabold transition shrink-0 cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition shrink-0 cursor-pointer ${
                       active
                         ? 'bg-amber-500 text-slate-950 shadow'
                         : 'bg-white/10 text-slate-300 hover:bg-white/20'
                     }`}
                   >
-                    Angkatan {angk}
+                    MB{angk}
                   </button>
                 );
               })}
@@ -130,7 +136,7 @@ export default function TransparansiSiswaPage() {
                     : 'text-slate-300 hover:bg-white/10'
                 }`}
               >
-                Status Iuran ({members.length})
+                Iuran ({members.length})
               </button>
               <button
                 type="button"
@@ -141,7 +147,7 @@ export default function TransparansiSiswaPage() {
                     : 'text-slate-300 hover:bg-white/10'
                 }`}
               >
-                Mutasi Kas ({transactions.length})
+                Mutasi ({transactions.length})
               </button>
             </div>
           </div>
@@ -149,279 +155,326 @@ export default function TransparansiSiswaPage() {
       </header>
 
       {/* Konten Utama */}
-      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-6 flex-1">
-        {/* Banner Informasi Angkatan */}
-        <div className="rounded-2xl bg-gradient-to-r from-[#131b2e] to-[#1e293b] text-white p-5 sm:p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold">
-              <span>📊 Transparansi Kas Siswa — Angkatan {activeAngkatan}</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-extrabold">
-              Buku Kas Terbuka Angkatan {activeAngkatan} (MB{activeAngkatan})
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl">
-              Halaman ini menampilkan data pembukuan asli untuk Angkatan {activeAngkatan} dalam mode khusus <strong>Hanya Membaca</strong>. Siswa dapat mengecek status pembayaran iuran dan rincian pemasukan/pengeluaran kas angkatan secara transparan.
-            </p>
-          </div>
-          <div className="bg-white/10 border border-white/15 rounded-xl p-4 shrink-0 min-w-[210px]">
-            <span className="text-[11px] uppercase tracking-wider text-amber-300 font-bold block">
-              Iuran Rutin Angkatan {activeAngkatan}
-            </span>
-            <span className="text-lg font-extrabold text-white block mt-0.5">
-              {formatRupiah(duesNominal)}
-            </span>
-            <span className="text-[11px] text-slate-300 block mt-0.5">
-              Terpisah per angkatan
-            </span>
-          </div>
-        </div>
-
+      <main className="max-w-7xl mx-auto w-full px-3 sm:px-6 py-5 space-y-5 flex-1">
         {/* 4 Kartu Ringkasan Kas Angkatan */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold uppercase text-slate-500">
-                Saldo Kas Angkatan {activeAngkatan}
-              </span>
-              <span className="material-symbols-outlined text-amber-600">
-                account_balance_wallet
-              </span>
-            </div>
-            <p className="text-2xl font-extrabold text-slate-900">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs">
+            <span className="text-[11px] font-bold uppercase text-slate-500 block">
+              Saldo Kas MB{activeAngkatan}
+            </span>
+            <p className="text-lg sm:text-2xl font-extrabold text-slate-900 mt-1">
               {formatRupiah(saldoAkhir)}
             </p>
-            <p className="text-xs text-slate-500 mt-1">
-              Saldo bersih kas MB{activeAngkatan} saat ini
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Iuran: {formatRupiah(duesNominal)}/pertemuan
             </p>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold uppercase text-slate-500">
-                Total Pemasukan (MB{activeAngkatan})
-              </span>
-              <span className="material-symbols-outlined text-emerald-600">
-                south_west
-              </span>
-            </div>
-            <p className="text-2xl font-extrabold text-emerald-600">
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs">
+            <span className="text-[11px] font-bold uppercase text-slate-500 block">
+              Kas Masuk MB{activeAngkatan}
+            </span>
+            <p className="text-lg sm:text-2xl font-extrabold text-emerald-600 mt-1">
               {formatRupiah(totalPemasukan)}
             </p>
-            <p className="text-xs text-slate-500 mt-1">
-              {transactions.filter((t) => t.type === 'pemasukan').length} transaksi kas masuk
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {transactions.filter((t) => t.type === 'pemasukan').length} transaksi
             </p>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold uppercase text-slate-500">
-                Total Pengeluaran (MB{activeAngkatan})
-              </span>
-              <span className="material-symbols-outlined text-rose-600">
-                north_east
-              </span>
-            </div>
-            <p className="text-2xl font-extrabold text-rose-600">
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs">
+            <span className="text-[11px] font-bold uppercase text-slate-500 block">
+              Kas Keluar MB{activeAngkatan}
+            </span>
+            <p className="text-lg sm:text-2xl font-extrabold text-rose-600 mt-1">
               {formatRupiah(totalPengeluaran)}
             </p>
-            <p className="text-xs text-slate-500 mt-1">
-              {transactions.filter((t) => t.type === 'pengeluaran').length} transaksi kas keluar
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {transactions.filter((t) => t.type === 'pengeluaran').length} transaksi
             </p>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold uppercase text-slate-500">
-                Kepatuhan Iuran (MB{activeAngkatan})
-              </span>
-              <span className="material-symbols-outlined text-sky-600">
-                groups
-              </span>
-            </div>
-            <p className="text-2xl font-extrabold text-slate-900">
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs">
+            <span className="text-[11px] font-bold uppercase text-slate-500 block">
+              Lunas ({activeSessionId})
+            </span>
+            <p className="text-lg sm:text-2xl font-extrabold text-slate-900 mt-1">
               {lunasCount} / {members.length} Siswa
             </p>
-            <p className="text-xs text-slate-500 mt-1">
-              {kepatuhanPersen}% Lunas • {belumCount} Belum Bayar
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {kepatuhanPersen}% Lunas • {belumCount} Belum
             </p>
           </div>
         </div>
 
-        {/* Bagian 1: Tabel Status Iuran Siswa Angkatan */}
+        {/* Bagian 1: Daftar Status Iuran Siswa per Pertemuan */}
         {(activeView === 'semua' || activeView === 'iuran') && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base sm:text-lg font-extrabold text-slate-900">
-                  Daftar Status Iuran Siswa — Angkatan {activeAngkatan}
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Ketik nama Anda pada kolom pencarian untuk melihat status pembayaran iuran.
-                </p>
+            <div className="p-4 border-b border-slate-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base sm:text-lg font-extrabold text-slate-900">
+                    Status Iuran Siswa per Pertemuan — Angkatan {activeAngkatan}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Kotak hijau menandakan pertemuan yang sudah lunas ({formatRupiah(duesNominal)} / pertemuan).
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={searchMember}
+                    onChange={(e) => setSearchMember(e.target.value)}
+                    placeholder="Cari nama / kelas..."
+                    className="px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none focus:border-slate-900"
+                  />
+                  <select
+                    value={sectionFilter}
+                    onChange={(e) => setSectionFilter(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none bg-white"
+                  >
+                    <option value="ALL">Semua Seksi</option>
+                    {SECTION_NAMES.map((sec) => (
+                      <option key={sec} value={sec}>
+                        {sec}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="text"
-                  value={searchMember}
-                  onChange={(e) => setSearchMember(e.target.value)}
-                  placeholder="Cari nama siswa..."
-                  className="px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none focus:border-slate-900"
-                />
-                <select
-                  value={sectionFilter}
-                  onChange={(e) => setSectionFilter(e.target.value)}
-                  className="px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none bg-white"
-                >
-                  <option value="ALL">Semua Seksi</option>
-                  <option value="Brass">Brass</option>
-                  <option value="Percussion">Percussion</option>
-                  <option value="Color Guard">Color Guard</option>
-                  <option value="Pit Instrument">Pit Instrument</option>
-                </select>
+
+              {/* Pemilih Pertemuan untuk melihat status spesifik */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                {sessions.map((ses) => (
+                  <button
+                    key={ses.id}
+                    type="button"
+                    onClick={() => setActiveSessionId(ses.id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 cursor-pointer ${
+                      ses.id === activeSessionId
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {ses.id}
+                  </button>
+                ))}
               </div>
             </div>
 
             {filteredMembers.length === 0 ? (
               <div className="p-10 text-center text-slate-500">
-                <span className="material-symbols-outlined text-4xl text-slate-300 mb-2 block">
-                  group_off
-                </span>
                 <p className="text-sm font-bold text-slate-700">
                   Belum ada data siswa di Angkatan {activeAngkatan}
                 </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Data siswa akan tampil di sini setelah diinput oleh Admin Angkatan {activeAngkatan} (MB{activeAngkatan}) atau Super Admin (Pembina).
-                </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs sm:text-sm">
-                  <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] border-b border-slate-200">
-                    <tr>
-                      <th className="py-3 px-4">Kode</th>
-                      <th className="py-3 px-4">Nama Siswa</th>
-                      <th className="py-3 px-4">Seksi / Instrumen</th>
-                      <th className="py-3 px-4 text-right">Nominal Iuran</th>
-                      <th className="py-3 px-4 text-center">Status</th>
-                      <th className="py-3 px-4">Tanggal Bayar</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredMembers.map((m) => (
-                      <tr key={m.id} className="hover:bg-slate-50">
-                        <td className="py-3 px-4 font-mono font-semibold text-slate-600">
-                          {m.memberCode}
-                        </td>
-                        <td className="py-3 px-4 font-bold text-slate-900">
-                          {m.fullName}
-                        </td>
-                        <td className="py-3 px-4 text-slate-600">
-                          {m.section} • {m.instrument}
-                        </td>
-                        <td className="py-3 px-4 text-right font-semibold text-slate-900">
-                          {formatRupiah(m.duesAmount)}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span
-                            className={`inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                              m.duesStatus === 'LUNAS'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-rose-100 text-rose-800'
-                            }`}
-                          >
-                            {m.duesStatus}
+              <>
+                {/* Tampilan Mobile (Kartu Rapi Tanpa Geser Kanan) */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {filteredMembers.map((m, idx) => {
+                    const paidCount = (m.paidSessions || []).length;
+                    return (
+                      <div key={m.id} className="p-3.5 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-mono font-bold text-slate-500">
+                                {idx + 1}.
+                              </span>
+                              <span className="text-sm font-extrabold text-slate-900">
+                                {m.fullName}
+                              </span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900">
+                                {m.kelas || '-'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500">
+                              {m.section} • {m.instrument}
+                            </p>
+                          </div>
+                          <span className="text-[11px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg shrink-0">
+                            {paidCount}x Lunas ({formatRupiah(paidCount * duesNominal)})
                           </span>
-                        </td>
-                        <td className="py-3 px-4 text-slate-500 text-xs">
-                          {m.paidAt}
-                        </td>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1">
+                          {sessions.map((ses) => {
+                            const paid = (m.paidSessions || []).includes(ses.id);
+                            return (
+                              <span
+                                key={ses.id}
+                                className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                                  paid
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'bg-slate-100 text-slate-400'
+                                }`}
+                              >
+                                {ses.id} {paid ? '✓' : ''}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Tampilan Desktop */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs sm:text-sm">
+                    <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] border-b border-slate-200">
+                      <tr>
+                        <th className="py-3 px-4">No</th>
+                        <th className="py-3 px-4">Nama Siswa</th>
+                        <th className="py-3 px-4">Kelas</th>
+                        <th className="py-3 px-4">Seksi / Alat</th>
+                        <th className="py-3 px-4">Status Pertemuan</th>
+                        <th className="py-3 px-4 text-right">Total Terbayar</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredMembers.map((m, idx) => {
+                        const paidCount = (m.paidSessions || []).length;
+                        return (
+                          <tr key={m.id} className="hover:bg-slate-50">
+                            <td className="py-3 px-4 font-mono text-slate-500">
+                              {idx + 1}
+                            </td>
+                            <td className="py-3 px-4 font-bold text-slate-900">
+                              {m.fullName}
+                            </td>
+                            <td className="py-3 px-4 font-semibold text-slate-700">
+                              {m.kelas || '-'}
+                            </td>
+                            <td className="py-3 px-4 text-slate-600">
+                              {m.section} • {m.instrument}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex flex-wrap gap-1">
+                                {sessions.map((ses) => {
+                                  const paid = (m.paidSessions || []).includes(
+                                    ses.id
+                                  );
+                                  return (
+                                    <span
+                                      key={ses.id}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                                        paid
+                                          ? 'bg-emerald-600 text-white'
+                                          : 'bg-slate-100 text-slate-400'
+                                      }`}
+                                    >
+                                      {ses.id}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-right font-extrabold text-emerald-700">
+                              {formatRupiah(paidCount * duesNominal)} ({paidCount}x)
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         )}
 
-        {/* Bagian 2: Tabel Riwayat Mutasi Kas Masuk & Keluar Angkatan */}
+        {/* Bagian 2: Riwayat Mutasi Kas */}
         {(activeView === 'semua' || activeView === 'mutasi') && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-4 sm:p-5 border-b border-slate-200">
+            <div className="p-4 border-b border-slate-200">
               <h2 className="text-base sm:text-lg font-extrabold text-slate-900">
                 Riwayat Pemasukan & Pengeluaran Kas — Angkatan {activeAngkatan}
               </h2>
-              <p className="text-xs text-slate-500">
-                Catatan transparan seluruh kas masuk dan keluar untuk Angkatan {activeAngkatan} (MB{activeAngkatan}).
-              </p>
             </div>
 
             {transactions.length === 0 ? (
               <div className="p-10 text-center text-slate-500">
-                <span className="material-symbols-outlined text-4xl text-slate-300 mb-2 block">
-                  receipt_long
-                </span>
                 <p className="text-sm font-bold text-slate-700">
                   Belum ada catatan transaksi di Angkatan {activeAngkatan}
                 </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Transaksi pemasukan dan pengeluaran yang dicatat oleh Admin MB{activeAngkatan} atau Super Admin akan otomatis muncul di sini.
-                </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs sm:text-sm">
-                  <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] border-b border-slate-200">
-                    <tr>
-                      <th className="py-3 px-4">Tanggal</th>
-                      <th className="py-3 px-4">No. Bukti</th>
-                      <th className="py-3 px-4">Kategori</th>
-                      <th className="py-3 px-4">Uraian Transaksi</th>
-                      <th className="py-3 px-4">Dicatat Oleh</th>
-                      <th className="py-3 px-4 text-right">Nominal</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {transactions.map((t) => (
-                      <tr key={t.id} className="hover:bg-slate-50">
-                        <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
-                          {t.transactionDate}
-                        </td>
-                        <td className="py-3 px-4 font-mono font-semibold text-slate-700 whitespace-nowrap">
-                          {t.referenceNo}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-bold ${
+              <>
+                {/* Mobile Card List */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {transactions.map((t) => (
+                    <div
+                      key={t.id}
+                      className="p-3.5 flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-mono text-slate-500">
+                          {t.transactionDate} • {t.referenceNo}
+                        </span>
+                        <p className="text-xs font-bold text-slate-900 truncate">
+                          {t.description}
+                        </p>
+                        <span className="text-[10px] text-slate-500">
+                          {t.category}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-xs font-extrabold shrink-0 ${
+                          t.type === 'pemasukan'
+                            ? 'text-emerald-600'
+                            : 'text-rose-600'
+                        }`}
+                      >
+                        {t.type === 'pemasukan' ? '+' : '-'}
+                        {formatRupiah(t.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs sm:text-sm">
+                    <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] border-b border-slate-200">
+                      <tr>
+                        <th className="py-3 px-4">Tanggal</th>
+                        <th className="py-3 px-4">No. Bukti</th>
+                        <th className="py-3 px-4">Kategori</th>
+                        <th className="py-3 px-4">Uraian Transaksi</th>
+                        <th className="py-3 px-4 text-right">Nominal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {transactions.map((t) => (
+                        <tr key={t.id} className="hover:bg-slate-50">
+                          <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
+                            {t.transactionDate}
+                          </td>
+                          <td className="py-3 px-4 font-mono font-semibold text-slate-700 whitespace-nowrap">
+                            {t.referenceNo}
+                          </td>
+                          <td className="py-3 px-4">{t.category}</td>
+                          <td className="py-3 px-4 font-medium text-slate-900">
+                            {t.description}
+                          </td>
+                          <td
+                            className={`py-3 px-4 text-right font-extrabold whitespace-nowrap ${
                               t.type === 'pemasukan'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-rose-100 text-rose-800'
+                                ? 'text-emerald-600'
+                                : 'text-rose-600'
                             }`}
                           >
-                            {t.category}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-medium text-slate-900">
-                          {t.description}
-                        </td>
-                        <td className="py-3 px-4 text-slate-500 text-xs">
-                          {t.recordedBy}
-                        </td>
-                        <td
-                          className={`py-3 px-4 text-right font-extrabold whitespace-nowrap ${
-                            t.type === 'pemasukan'
-                              ? 'text-emerald-600'
-                              : 'text-rose-600'
-                          }`}
-                        >
-                          {t.type === 'pemasukan' ? '+' : '-'}
-                          {formatRupiah(t.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                            {t.type === 'pemasukan' ? '+' : '-'}
+                            {formatRupiah(t.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         )}

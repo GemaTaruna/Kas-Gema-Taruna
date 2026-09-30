@@ -6,6 +6,33 @@ import { createClient } from '@/lib/supabase/client';
 export type AngkatanId = '16' | '17' | '18' | '19' | '20' | '21';
 export type AppRole = 'superadmin' | 'admin_angkatan' | 'siswa';
 
+export const SECTION_OPTIONS: Record<string, string[]> = {
+  'BRASS': ['Terompet', 'Bariton'],
+  'PERCUSSION': ['Bass Drum', 'Snare Drum', 'Tenor', 'Simbal'],
+  'PIT INSTRUMENT': ['Belira', 'Instrumen Statis Lainnya'],
+  'COLOR GUARD': ['Bendera & Visual Performance'],
+  'LEADERSHIP': ['Field Commander', 'Stickmaster Taruna/i'],
+};
+
+export const SECTION_NAMES = Object.keys(SECTION_OPTIONS);
+
+export interface SessionInfo {
+  id: string; // e.g. 'P1', 'P2', ...
+  label: string; // e.g. 'Pertemuan 1'
+  date: string;
+}
+
+export const DEFAULT_SESSIONS: SessionInfo[] = [
+  { id: 'P1', label: 'Pertemuan 1 (Minggu 1 - Sesi 1)', date: '' },
+  { id: 'P2', label: 'Pertemuan 2 (Minggu 1 - Sesi 2)', date: '' },
+  { id: 'P3', label: 'Pertemuan 3 (Minggu 2 - Sesi 1)', date: '' },
+  { id: 'P4', label: 'Pertemuan 4 (Minggu 2 - Sesi 2)', date: '' },
+  { id: 'P5', label: 'Pertemuan 5 (Minggu 3 - Sesi 1)', date: '' },
+  { id: 'P6', label: 'Pertemuan 6 (Minggu 3 - Sesi 2)', date: '' },
+  { id: 'P7', label: 'Pertemuan 7 (Minggu 4 - Sesi 1)', date: '' },
+  { id: 'P8', label: 'Pertemuan 8 (Minggu 4 - Sesi 2)', date: '' },
+];
+
 export interface AccountInfo {
   username: string;
   password?: string;
@@ -17,14 +44,16 @@ export interface AccountInfo {
 export interface MemberItem {
   id: string;
   angkatan: AngkatanId;
-  memberCode: string;
-  fullName: string;
-  section: string;
-  instrument: string;
-  phone: string;
+  memberCode: string; // No / Kode
+  fullName: string;   // Nama
+  kelas: string;      // Kelas
+  section: string;    // Seksi
+  instrument: string; // Alat
+  phone: string;      // No WA
   status: string;
   duesStatus: 'LUNAS' | 'BELUM BAYAR';
   paidAt: string;
+  paidSessions: string[]; // Daftar ID pertemuan yang sudah lunas, misal ['P1', 'P2']
   duesAmount: number;
 }
 
@@ -114,6 +143,77 @@ const EMPTY_TRANSACTIONS_BY_ANGKATAN: Record<AngkatanId, TransactionItem[]> = {
   '21': [],
 };
 
+const DEFAULT_SESSIONS_BY_ANGKATAN: Record<AngkatanId, SessionInfo[]> = {
+  '16': DEFAULT_SESSIONS,
+  '17': DEFAULT_SESSIONS,
+  '18': DEFAULT_SESSIONS,
+  '19': DEFAULT_SESSIONS,
+  '20': DEFAULT_SESSIONS,
+  '21': DEFAULT_SESSIONS,
+};
+
+export const DEFAULT_WA_TEMPLATE =
+  'Halo *{nama}* ({kelas} - {seksi}), mengingatkan iuran kas Marching Band Gema Taruna (Angkatan {angkatan}) untuk *{pertemuan}* sebesar *{nominal}* belum tercatat lunas. Mohon dapat dibayarkan pada pertemuan latihan berikutnya. Terima kasih 🙏';
+
+export function formatWhatsAppLink(
+  phone: string,
+  template: string,
+  vars: {
+    nama: string;
+    kelas: string;
+    seksi: string;
+    angkatan: string;
+    pertemuan: string;
+    nominal: string;
+  }
+): string {
+  let cleanPhone = (phone || '').replace(/[^0-9]/g, '');
+  if (cleanPhone.startsWith('0')) {
+    cleanPhone = '62' + cleanPhone.slice(1);
+  } else if (cleanPhone.startsWith('8')) {
+    cleanPhone = '62' + cleanPhone;
+  }
+  const msg = template
+    .replace(/\{nama\}/g, vars.nama)
+    .replace(/\{kelas\}/g, vars.kelas || '-')
+    .replace(/\{seksi\}/g, vars.seksi)
+    .replace(/\{angkatan\}/g, vars.angkatan)
+    .replace(/\{pertemuan\}/g, vars.pertemuan)
+    .replace(/\{nominal\}/g, vars.nominal);
+
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+}
+
+// Helper untuk encode/decode kelas & paidSessions ke kolom Supabase yang sudah ada
+function encodeStatusField(kelas: string, status: string): string {
+  return `${kelas || '-'}||${status || 'Aktif'}`;
+}
+
+function decodeStatusField(raw: string): { kelas: string; status: string } {
+  if (!raw) return { kelas: '-', status: 'Aktif' };
+  if (raw.includes('||')) {
+    const [kelas, status] = raw.split('||');
+    return { kelas: kelas || '-', status: status || 'Aktif' };
+  }
+  return { kelas: '-', status: raw };
+}
+
+function encodePaidSessions(sessions: string[]): string {
+  return JSON.stringify(sessions || []);
+}
+
+function decodePaidSessions(raw: string | null | undefined): string[] {
+  if (!raw || raw === '-') return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    // fallback comma separated
+    if (raw.startsWith('P')) return raw.split(',').map((s) => s.trim());
+  }
+  return [];
+}
+
 interface AngkatanContextValue {
   role: AppRole;
   username: string;
@@ -121,8 +221,14 @@ interface AngkatanContextValue {
   lockedAngkatan: AngkatanId | null;
   activeAngkatan: AngkatanId;
   canEdit: boolean;
-  duesNominal: number;
+  duesNominal: number; // Default Rp 5.000 per pertemuan
   setDuesNominal: (val: number) => void;
+  waTemplate: string;
+  setWaTemplate: (val: string) => void;
+  sessions: SessionInfo[];
+  activeSessionId: string;
+  setActiveSessionId: (id: string) => void;
+  addCustomSession: (label: string, date: string) => void;
   setActiveAngkatan: (a: AngkatanId) => void;
   loginWithCredentials: (
     usernameInput: string,
@@ -136,12 +242,26 @@ interface AngkatanContextValue {
   totalPengeluaran: number;
   saldoAkhir: number;
   addTransaction: (
-    tx: Omit<TransactionItem, 'id' | 'angkatan' | 'referenceNo' | 'recordedBy'>
+    tx: Omit<TransactionItem, 'id' | 'angkatan' | 'referenceNo' | 'recordedBy'> & {
+      customRefNo?: string;
+    }
   ) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
-  addMember: (m: Omit<MemberItem, 'id' | 'angkatan'>) => Promise<void>;
+  addMember: (
+    m: Omit<MemberItem, 'id' | 'angkatan' | 'paidSessions' | 'duesStatus' | 'paidAt'>
+  ) => Promise<void>;
+  importMembersBulk: (
+    rows: Array<{
+      no?: string;
+      nama: string;
+      kelas: string;
+      seksi: string;
+      alat: string;
+      phone: string;
+    }>
+  ) => Promise<number>;
   deleteMember: (id: string) => Promise<void>;
-  toggleMemberDues: (id: string, recordToCash?: boolean) => Promise<void>;
+  toggleSessionDues: (memberId: string, sessionId: string) => Promise<void>;
 }
 
 const AngkatanContext = createContext<AngkatanContextValue | null>(null);
@@ -158,7 +278,12 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
   const [displayName, setDisplayName] = useState<string>('Super Admin (Pembina)');
   const [lockedAngkatan, setLockedAngkatan] = useState<AngkatanId | null>(null);
   const [activeAngkatan, setActiveAngkatanState] = useState<AngkatanId>('16');
-  const [duesNominal, setDuesNominalState] = useState<number>(50000);
+  const [duesNominal, setDuesNominalState] = useState<number>(5000); // Rp 5.000 per pertemuan
+  const [waTemplate, setWaTemplateState] = useState<string>(DEFAULT_WA_TEMPLATE);
+  const [sessionsByAngkatan, setSessionsByAngkatan] = useState<
+    Record<AngkatanId, SessionInfo[]>
+  >(DEFAULT_SESSIONS_BY_ANGKATAN);
+  const [activeSessionId, setActiveSessionId] = useState<string>('P1');
 
   const [membersByAngkatan, setMembersByAngkatan] = useState<Record<AngkatanId, MemberItem[]>>(
     EMPTY_MEMBERS_BY_ANGKATAN
@@ -168,14 +293,6 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    // Hapus cache dummy lama jika ada
-    try {
-      localStorage.removeItem('kgt_members_multi_v1');
-      localStorage.removeItem('kgt_tx_multi_v1');
-    } catch {
-      // ignore
-    }
-
     const savedRole = (getCookieValue('kgt_session_role') as AppRole) || 'superadmin';
     const savedUser = getCookieValue('kgt_session_user') || 'Gema Taruna';
     const savedDisplay = getCookieValue('kgt_session_display') || 'Super Admin (Pembina)';
@@ -191,17 +308,25 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const storedMembers = localStorage.getItem('kgt_real_members_v2');
+      const storedMembers = localStorage.getItem('kgt_real_members_v3');
       if (storedMembers) {
         setMembersByAngkatan(JSON.parse(storedMembers));
       }
-      const storedTx = localStorage.getItem('kgt_real_tx_v2');
+      const storedTx = localStorage.getItem('kgt_real_tx_v3');
       if (storedTx) {
         setTxByAngkatan(JSON.parse(storedTx));
       }
-      const storedNominal = localStorage.getItem('kgt_dues_nominal_v2');
+      const storedNominal = localStorage.getItem('kgt_dues_nominal_v3');
       if (storedNominal) {
-        setDuesNominalState(Number(storedNominal) || 50000);
+        setDuesNominalState(Number(storedNominal) || 5000);
+      }
+      const storedWa = localStorage.getItem('kgt_wa_template_v3');
+      if (storedWa) {
+        setWaTemplateState(storedWa);
+      }
+      const storedSessions = localStorage.getItem('kgt_sessions_v3');
+      if (storedSessions) {
+        setSessionsByAngkatan(JSON.parse(storedSessions));
       }
     } catch {
       // ignore
@@ -226,22 +351,28 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
           };
           ANGKATAN_LIST.forEach((a) => {
             const list = dbMembers.filter((m: any) => m.angkatan === a);
-            grouped[a] = list.map((m: any) => ({
-              id: m.id,
-              angkatan: m.angkatan,
-              memberCode: m.member_code,
-              fullName: m.full_name,
-              section: m.section,
-              instrument: m.instrument || '-',
-              phone: m.phone || '',
-              status: m.status || 'Aktif',
-              duesStatus: m.dues_status === 'LUNAS' ? 'LUNAS' : 'BELUM BAYAR',
-              paidAt: m.paid_at || '-',
-              duesAmount: Number(m.dues_amount || 50000),
-            }));
+            grouped[a] = list.map((m: any) => {
+              const { kelas, status } = decodeStatusField(m.status);
+              const paidSessions = decodePaidSessions(m.paid_at);
+              return {
+                id: m.id,
+                angkatan: m.angkatan,
+                memberCode: m.member_code,
+                fullName: m.full_name,
+                kelas,
+                section: m.section || 'BRASS',
+                instrument: m.instrument || 'Terompet',
+                phone: m.phone || '',
+                status,
+                duesStatus: paidSessions.length > 0 ? 'LUNAS' : 'BELUM BAYAR',
+                paidAt: m.paid_at || '-',
+                paidSessions,
+                duesAmount: Number(m.dues_amount || 5000),
+              };
+            });
           });
           setMembersByAngkatan(grouped);
-          localStorage.setItem('kgt_real_members_v2', JSON.stringify(grouped));
+          localStorage.setItem('kgt_real_members_v3', JSON.stringify(grouped));
         }
 
         const { data: dbTx } = await (supabase as any)
@@ -275,7 +406,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
             }));
           });
           setTxByAngkatan(groupedTx);
-          localStorage.setItem('kgt_real_tx_v2', JSON.stringify(groupedTx));
+          localStorage.setItem('kgt_real_tx_v3', JSON.stringify(groupedTx));
         }
       } catch {
         // Fallback to localStorage
@@ -288,7 +419,37 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
   const setDuesNominal = (val: number) => {
     setDuesNominalState(val);
     try {
-      localStorage.setItem('kgt_dues_nominal_v2', String(val));
+      localStorage.setItem('kgt_dues_nominal_v3', String(val));
+    } catch {
+      // ignore
+    }
+  };
+
+  const setWaTemplate = (val: string) => {
+    setWaTemplateState(val);
+    try {
+      localStorage.setItem('kgt_wa_template_v3', val);
+    } catch {
+      // ignore
+    }
+  };
+
+  const addCustomSession = (label: string, date: string) => {
+    const currentList = sessionsByAngkatan[activeAngkatan] || DEFAULT_SESSIONS;
+    const nextNum = currentList.length + 1;
+    const newSession: SessionInfo = {
+      id: `P${nextNum}`,
+      label: label.trim() || `Pertemuan ${nextNum}`,
+      date,
+    };
+    const updated = {
+      ...sessionsByAngkatan,
+      [activeAngkatan]: [...currentList, newSession],
+    };
+    setSessionsByAngkatan(updated);
+    setActiveSessionId(newSession.id);
+    try {
+      localStorage.setItem('kgt_sessions_v3', JSON.stringify(updated));
     } catch {
       // ignore
     }
@@ -358,7 +519,17 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     role === 'superadmin' ||
     (role === 'admin_angkatan' && lockedAngkatan === activeAngkatan);
 
-  const currentMembers = membersByAngkatan[activeAngkatan] || [];
+  const currentSessions = sessionsByAngkatan[activeAngkatan] || DEFAULT_SESSIONS;
+  const rawMembers = membersByAngkatan[activeAngkatan] || [];
+
+  // Status LUNAS/BELUM BAYAR dievaluasi berdasarkan pertemuan aktif (activeSessionId)
+  const currentMembers: MemberItem[] = rawMembers.map((m) => ({
+    ...m,
+    duesStatus: (m.paidSessions || []).includes(activeSessionId)
+      ? 'LUNAS'
+      : 'BELUM BAYAR',
+  }));
+
   const currentTransactions = txByAngkatan[activeAngkatan] || [];
 
   const totalPemasukan = currentTransactions
@@ -372,7 +543,9 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
   const saldoAkhir = totalPemasukan - totalPengeluaran;
 
   const addTransaction = async (
-    tx: Omit<TransactionItem, 'id' | 'angkatan' | 'referenceNo' | 'recordedBy'>
+    tx: Omit<TransactionItem, 'id' | 'angkatan' | 'referenceNo' | 'recordedBy'> & {
+      customRefNo?: string;
+    }
   ) => {
     if (!canEdit) return;
     const prefix = tx.type === 'pemasukan' ? 'BKM' : 'BKK';
@@ -382,20 +555,30 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         ? crypto.randomUUID()
         : `${prefix}-${activeAngkatan}-${Date.now()}`;
 
+    const refNo = tx.customRefNo || `${prefix}-${activeAngkatan}-${seq}`;
+
     const newTx: TransactionItem = {
-      ...tx,
       id: newId,
       angkatan: activeAngkatan,
-      referenceNo: `${prefix}-${activeAngkatan}-${seq}`,
+      referenceNo: refNo,
+      type: tx.type,
+      category: tx.category,
+      description: tx.description,
+      vendor: tx.vendor,
+      amount: tx.amount,
+      paymentMethod: tx.paymentMethod,
       recordedBy: username,
+      transactionDate: tx.transactionDate,
     };
 
-    const updated = {
-      ...txByAngkatan,
-      [activeAngkatan]: [newTx, ...(txByAngkatan[activeAngkatan] || [])],
-    };
-    setTxByAngkatan(updated);
-    localStorage.setItem('kgt_real_tx_v2', JSON.stringify(updated));
+    setTxByAngkatan((prev) => {
+      const updated = {
+        ...prev,
+        [activeAngkatan]: [newTx, ...(prev[activeAngkatan] || [])],
+      };
+      localStorage.setItem('kgt_real_tx_v3', JSON.stringify(updated));
+      return updated;
+    });
 
     try {
       const supabase = createClient();
@@ -419,12 +602,14 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
 
   const deleteTransaction = async (id: string) => {
     if (!canEdit) return;
-    const updated = {
-      ...txByAngkatan,
-      [activeAngkatan]: (txByAngkatan[activeAngkatan] || []).filter((t) => t.id !== id),
-    };
-    setTxByAngkatan(updated);
-    localStorage.setItem('kgt_real_tx_v2', JSON.stringify(updated));
+    setTxByAngkatan((prev) => {
+      const updated = {
+        ...prev,
+        [activeAngkatan]: (prev[activeAngkatan] || []).filter((t) => t.id !== id),
+      };
+      localStorage.setItem('kgt_real_tx_v3', JSON.stringify(updated));
+      return updated;
+    });
 
     try {
       const supabase = createClient();
@@ -434,7 +619,9 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const addMember = async (m: Omit<MemberItem, 'id' | 'angkatan'>) => {
+  const addMember = async (
+    m: Omit<MemberItem, 'id' | 'angkatan' | 'paidSessions' | 'duesStatus' | 'paidAt'>
+  ) => {
     if (!canEdit) return;
     const newId =
       typeof crypto !== 'undefined' && crypto.randomUUID
@@ -445,13 +632,19 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       ...m,
       id: newId,
       angkatan: activeAngkatan,
+      duesStatus: 'BELUM BAYAR',
+      paidAt: '[]',
+      paidSessions: [],
     };
-    const updated = {
-      ...membersByAngkatan,
-      [activeAngkatan]: [...(membersByAngkatan[activeAngkatan] || []), newMember],
-    };
-    setMembersByAngkatan(updated);
-    localStorage.setItem('kgt_real_members_v2', JSON.stringify(updated));
+
+    setMembersByAngkatan((prev) => {
+      const updated = {
+        ...prev,
+        [activeAngkatan]: [...(prev[activeAngkatan] || []), newMember],
+      };
+      localStorage.setItem('kgt_real_members_v3', JSON.stringify(updated));
+      return updated;
+    });
 
     try {
       const supabase = createClient();
@@ -463,9 +656,9 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         section: newMember.section,
         instrument: newMember.instrument,
         phone: newMember.phone,
-        status: newMember.status,
-        dues_status: newMember.duesStatus,
-        paid_at: newMember.paidAt,
+        status: encodeStatusField(newMember.kelas, newMember.status),
+        dues_status: 'BELUM BAYAR',
+        paid_at: encodePaidSessions([]),
         dues_amount: newMember.duesAmount,
       });
     } catch {
@@ -473,14 +666,94 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const importMembersBulk = async (
+    rows: Array<{
+      no?: string;
+      nama: string;
+      kelas: string;
+      seksi: string;
+      alat: string;
+      phone: string;
+    }>
+  ): Promise<number> => {
+    if (!canEdit || rows.length === 0) return 0;
+
+    const existingCount = (membersByAngkatan[activeAngkatan] || []).length;
+    const newItems: MemberItem[] = rows.map((r, idx) => {
+      const seq = r.no?.trim() || String(existingCount + idx + 1).padStart(2, '0');
+      const code = seq.toUpperCase().startsWith('MB')
+        ? seq
+        : `MB${activeAngkatan}-${seq.padStart(2, '0')}`;
+      const newId =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `m${activeAngkatan}-${Date.now()}-${idx}`;
+
+      const upperSec = (r.seksi || 'BRASS').trim().toUpperCase();
+      const matchedSec =
+        SECTION_NAMES.find((s) => upperSec.includes(s) || s.includes(upperSec)) ||
+        'BRASS';
+      const defaultAlat = SECTION_OPTIONS[matchedSec]?.[0] || 'Terompet';
+
+      return {
+        id: newId,
+        angkatan: activeAngkatan,
+        memberCode: code,
+        fullName: r.nama.trim(),
+        kelas: (r.kelas || '-').trim(),
+        section: matchedSec,
+        instrument: (r.alat || defaultAlat).trim(),
+        phone: (r.phone || '').trim(),
+        status: 'Aktif',
+        duesStatus: 'BELUM BAYAR',
+        paidAt: '[]',
+        paidSessions: [],
+        duesAmount: duesNominal,
+      };
+    });
+
+    setMembersByAngkatan((prev) => {
+      const updated = {
+        ...prev,
+        [activeAngkatan]: [...(prev[activeAngkatan] || []), ...newItems],
+      };
+      localStorage.setItem('kgt_real_members_v3', JSON.stringify(updated));
+      return updated;
+    });
+
+    try {
+      const supabase = createClient();
+      const dbPayload = newItems.map((item) => ({
+        id: item.id,
+        angkatan: activeAngkatan,
+        member_code: item.memberCode,
+        full_name: item.fullName,
+        section: item.section,
+        instrument: item.instrument,
+        phone: item.phone,
+        status: encodeStatusField(item.kelas, item.status),
+        dues_status: 'BELUM BAYAR',
+        paid_at: encodePaidSessions([]),
+        dues_amount: item.duesAmount,
+      }));
+      await (supabase as any).from('kgt_members').insert(dbPayload);
+    } catch {
+      // Saved in localStorage
+    }
+
+    return newItems.length;
+  };
+
   const deleteMember = async (id: string) => {
     if (!canEdit) return;
-    const updated = {
-      ...membersByAngkatan,
-      [activeAngkatan]: (membersByAngkatan[activeAngkatan] || []).filter((m) => m.id !== id),
-    };
-    setMembersByAngkatan(updated);
-    localStorage.setItem('kgt_real_members_v2', JSON.stringify(updated));
+    setMembersByAngkatan((prev) => {
+      const updated = {
+        ...prev,
+        [activeAngkatan]: (prev[activeAngkatan] || []).filter((m) => m.id !== id),
+      };
+      localStorage.setItem('kgt_real_members_v3', JSON.stringify(updated));
+      return updated;
+    });
 
     try {
       const supabase = createClient();
@@ -490,54 +763,102 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const toggleMemberDues = async (id: string, recordToCash = false) => {
+  // Tandai Lunas / Batalkan Lunas untuk Pertemuan tertentu (Otomatis tambah/hapus di Pemasukan Kas!)
+  const toggleSessionDues = async (memberId: string, sessionId: string) => {
     if (!canEdit) return;
     const list = membersByAngkatan[activeAngkatan] || [];
-    const target = list.find((item) => item.id === id);
+    const target = list.find((item) => item.id === memberId);
     if (!target) return;
 
-    const nextStatus: 'LUNAS' | 'BELUM BAYAR' =
-      target.duesStatus === 'LUNAS' ? 'BELUM BAYAR' : 'LUNAS';
-    const nextPaidAt =
-      nextStatus === 'LUNAS'
-        ? new Date().toLocaleDateString('id-ID', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-          })
-        : '-';
+    const currentPaid = target.paidSessions || [];
+    const isCurrentlyPaid = currentPaid.includes(sessionId);
+    const nextPaid = isCurrentlyPaid
+      ? currentPaid.filter((s) => s !== sessionId)
+      : [...currentPaid, sessionId];
 
-    const updatedList = list.map((item) =>
-      item.id === id ? { ...item, duesStatus: nextStatus, paidAt: nextPaidAt } : item
-    );
+    const sessionObj = currentSessions.find((s) => s.id === sessionId);
+    const sessionLabel = sessionObj ? sessionObj.label : sessionId;
 
-    const updated = {
-      ...membersByAngkatan,
-      [activeAngkatan]: updatedList,
-    };
-    setMembersByAngkatan(updated);
-    localStorage.setItem('kgt_real_members_v2', JSON.stringify(updated));
+    // Reference No unik untuk transaksi iuran siswa per pertemuan
+    const linkedRefNo = `IUR-${activeAngkatan}-${target.memberCode}-${sessionId}`;
+
+    // Update state member
+    setMembersByAngkatan((prev) => {
+      const updatedList = (prev[activeAngkatan] || []).map((item) =>
+        item.id === memberId
+          ? {
+              ...item,
+              paidSessions: nextPaid,
+              paidAt: encodePaidSessions(nextPaid),
+              duesStatus: (nextPaid.includes(activeSessionId)
+                ? 'LUNAS'
+                : 'BELUM BAYAR') as 'LUNAS' | 'BELUM BAYAR',
+            }
+          : item
+      );
+      const updated = { ...prev, [activeAngkatan]: updatedList };
+      localStorage.setItem('kgt_real_members_v3', JSON.stringify(updated));
+      return updated;
+    });
 
     try {
       const supabase = createClient();
       await (supabase as any)
         .from('kgt_members')
-        .update({ dues_status: nextStatus, paid_at: nextPaidAt })
-        .eq('id', id);
+        .update({
+          dues_status: nextPaid.length > 0 ? 'LUNAS' : 'BELUM BAYAR',
+          paid_at: encodePaidSessions(nextPaid),
+        })
+        .eq('id', memberId);
     } catch {
       // Updated in localStorage
     }
 
-    if (recordToCash && nextStatus === 'LUNAS') {
+    if (!isCurrentlyPaid) {
+      // Ditandai LUNAS -> Otomatis tambah ke Pemasukan Kas
       await addTransaction({
+        customRefNo: linkedRefNo,
         type: 'pemasukan',
-        category: 'Iuran Anggota',
-        description: `Pembayaran Iuran Kas - ${target.fullName} (${target.memberCode})`,
+        category: 'Iuran Pertemuan',
+        description: `Iuran ${sessionLabel} - ${target.fullName} (${target.kelas})`,
         vendor: target.fullName,
-        amount: target.duesAmount || duesNominal,
+        amount: duesNominal,
         paymentMethod: 'Tunai Kas',
         transactionDate: new Date().toISOString().slice(0, 10),
       });
+    } else {
+      // Dibatalkan LUNAS -> Otomatis hapus dari Pemasukan Kas!
+      const matchingTx = (txByAngkatan[activeAngkatan] || []).find(
+        (t) => t.referenceNo === linkedRefNo
+      );
+
+      setTxByAngkatan((prev) => {
+        const updated = {
+          ...prev,
+          [activeAngkatan]: (prev[activeAngkatan] || []).filter(
+            (t) => t.referenceNo !== linkedRefNo
+          ),
+        };
+        localStorage.setItem('kgt_real_tx_v3', JSON.stringify(updated));
+        return updated;
+      });
+
+      try {
+        const supabase = createClient();
+        if (matchingTx) {
+          await (supabase as any)
+            .from('kgt_transactions')
+            .delete()
+            .eq('id', matchingTx.id);
+        } else {
+          await (supabase as any)
+            .from('kgt_transactions')
+            .delete()
+            .eq('reference_no', linkedRefNo);
+        }
+      } catch {
+        // Deleted from localStorage
+      }
     }
   };
 
@@ -552,6 +873,12 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         canEdit,
         duesNominal,
         setDuesNominal,
+        waTemplate,
+        setWaTemplate,
+        sessions: currentSessions,
+        activeSessionId,
+        setActiveSessionId,
+        addCustomSession,
         setActiveAngkatan,
         loginWithCredentials,
         enterStudentMode,
@@ -564,8 +891,9 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         addTransaction,
         deleteTransaction,
         addMember,
+        importMembersBulk,
         deleteMember,
-        toggleMemberDues,
+        toggleSessionDues,
       }}
     >
       {children}

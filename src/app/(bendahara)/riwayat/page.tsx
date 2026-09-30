@@ -123,76 +123,132 @@ export default function RiwayatTransaksiPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs sm:text-sm">
-              <thead className="bg-surface-container-low text-on-surface-variant uppercase text-[11px] border-b border-outline-variant/40">
-                <tr>
-                  <th className="py-3 px-4">Tanggal</th>
-                  <th className="py-3 px-4">No. Bukti</th>
-                  <th className="py-3 px-4">Jenis</th>
-                  <th className="py-3 px-4">Kategori & Uraian</th>
-                  <th className="py-3 px-4">Dicatat Oleh</th>
-                  <th className="py-3 px-4 text-right">Nominal</th>
-                  {canEdit && <th className="py-3 px-4 text-right">Aksi</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant/20">
-                {filtered.map((t) => (
-                  <tr key={t.id} className="hover:bg-surface-container-low/50">
-                    <td className="py-3 px-4 whitespace-nowrap text-on-surface-variant">
-                      {t.transactionDate}
-                    </td>
-                    <td className="py-3 px-4 font-mono font-semibold text-on-surface whitespace-nowrap">
-                      {t.referenceNo}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-bold ${
+          <>
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs sm:text-sm">
+                <thead className="bg-surface-container-low text-on-surface-variant uppercase text-[11px] border-b border-outline-variant/40">
+                  <tr>
+                    <th className="py-3 px-4">Tanggal</th>
+                    <th className="py-3 px-4">No. Bukti</th>
+                    <th className="py-3 px-4">Jenis</th>
+                    <th className="py-3 px-4">Kategori & Uraian</th>
+                    <th className="py-3 px-4">Dicatat Oleh</th>
+                    <th className="py-3 px-4 text-right">Nominal</th>
+                    {canEdit && <th className="py-3 px-4 text-right">Aksi</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/20">
+                  {filtered.map((t) => (
+                    <tr key={t.id} className="hover:bg-surface-container-low/50">
+                      <td className="py-3 px-4 whitespace-nowrap text-on-surface-variant">
+                        {t.transactionDate}
+                      </td>
+                      <td className="py-3 px-4 font-mono font-semibold text-on-surface whitespace-nowrap">
+                        {t.referenceNo}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                            t.type === 'pemasukan'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {t.type === 'pemasukan' ? 'MASUK' : 'KELUAR'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="font-bold text-on-surface block">
+                          {t.description}
+                        </span>
+                        <span className="text-xs text-on-surface-variant">
+                          {t.category} • {t.vendor}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-xs text-on-surface-variant">
+                        {t.recordedBy}
+                      </td>
+                      <td
+                        className={`py-3 px-4 text-right font-extrabold whitespace-nowrap ${
                           t.type === 'pemasukan'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-rose-100 text-rose-800'
+                            ? 'text-emerald-600'
+                            : 'text-rose-600'
                         }`}
                       >
-                        {t.type === 'pemasukan' ? 'MASUK' : 'KELUAR'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="font-bold text-on-surface block">
+                        {t.type === 'pemasukan' ? '+' : '-'}
+                        {formatRupiah(t.amount)}
+                      </td>
+                      {canEdit && (
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => deleteTransaction(t.id)}
+                            className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
+                          >
+                            Hapus
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card List (Tanpa Geser Layar) */}
+            <div className="md:hidden divide-y divide-outline-variant/30">
+              {filtered.map((t) => (
+                <div key={t.id} className="p-4 flex flex-col gap-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            t.type === 'pemasukan'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {t.type === 'pemasukan' ? 'MASUK' : 'KELUAR'}
+                        </span>
+                        <span className="text-[11px] font-mono text-on-surface-variant">
+                          {t.transactionDate} • {t.referenceNo}
+                        </span>
+                      </div>
+                      <p className="font-extrabold text-sm text-on-surface">
                         {t.description}
+                      </p>
+                      <p className="text-xs text-on-surface-variant mt-0.5">
+                        {t.category} • Oleh: {t.recordedBy}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span
+                        className={`font-extrabold text-sm block ${
+                          t.type === 'pemasukan'
+                            ? 'text-emerald-600'
+                            : 'text-rose-600'
+                        }`}
+                      >
+                        {t.type === 'pemasukan' ? '+' : '-'}
+                        {formatRupiah(t.amount)}
                       </span>
-                      <span className="text-xs text-on-surface-variant">
-                        {t.category} • {t.vendor}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-xs text-on-surface-variant">
-                      {t.recordedBy}
-                    </td>
-                    <td
-                      className={`py-3 px-4 text-right font-extrabold whitespace-nowrap ${
-                        t.type === 'pemasukan'
-                          ? 'text-emerald-600'
-                          : 'text-rose-600'
-                      }`}
-                    >
-                      {t.type === 'pemasukan' ? '+' : '-'}
-                      {formatRupiah(t.amount)}
-                    </td>
-                    {canEdit && (
-                      <td className="py-3 px-4 text-right">
+                      {canEdit && (
                         <button
                           type="button"
                           onClick={() => deleteTransaction(t.id)}
-                          className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
+                          className="mt-1.5 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 font-bold text-[11px] cursor-pointer"
                         >
                           Hapus
                         </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

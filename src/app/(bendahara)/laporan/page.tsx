@@ -1,12 +1,13 @@
 'use client';
 
 import React from 'react';
-import { useAngkatan } from '@/context/AngkatanContext';
+import { SECTION_NAMES, useAngkatan } from '@/context/AngkatanContext';
 import { formatRupiah } from '@/lib/utils';
 
 export default function LaporanKeuanganPage() {
   const {
     activeAngkatan,
+    activeSessionId,
     members,
     transactions,
     totalPemasukan,
@@ -14,11 +15,11 @@ export default function LaporanKeuanganPage() {
     saldoAkhir,
   } = useAngkatan();
 
-  const lunasCount = members.filter((m) => m.duesStatus === 'LUNAS').length;
+  const lunasCount = members.filter((m) =>
+    (m.paidSessions || []).includes(activeSessionId)
+  ).length;
   const kepatuhanPersen =
     members.length > 0 ? Math.round((lunasCount / members.length) * 100) : 0;
-
-  const sections = ['Brass', 'Percussion', 'Color Guard', 'Pit Instrument'];
 
   const handlePrint = () => {
     if (typeof window !== 'undefined') {
@@ -27,8 +28,8 @@ export default function LaporanKeuanganPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 flex flex-col gap-6 max-w-[1440px] mx-auto w-full">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="p-3 sm:p-6 flex flex-col gap-5 max-w-[1440px] mx-auto w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <span className="text-xs font-bold uppercase tracking-wider text-secondary">
             LAPORAN PERTANGGUNGJAWABAN (LPJ)
@@ -37,7 +38,7 @@ export default function LaporanKeuanganPage() {
             Laporan Keuangan — Angkatan {activeAngkatan} (MB{activeAngkatan})
           </h1>
           <p className="text-xs sm:text-sm text-on-surface-variant">
-            Rekapitulasi resmi pemasukan, pengeluaran, dan kepatuhan iuran khusus Angkatan {activeAngkatan}.
+            Rekapitulasi resmi pemasukan, pengeluaran, dan kepatuhan iuran per seksi.
           </p>
         </div>
 
@@ -49,72 +50,74 @@ export default function LaporanKeuanganPage() {
           <span className="material-symbols-outlined text-[18px] text-secondary-fixed">
             print
           </span>
-          <span>Cetak / Simpan PDF Laporan MB{activeAngkatan}</span>
+          <span>Cetak / Simpan PDF</span>
         </button>
       </div>
 
       {/* Ringkasan Eksekutif Angkatan */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/40">
-          <span className="text-xs font-bold uppercase text-on-surface-variant block mb-1">
-            Saldo Kas Bersih (MB{activeAngkatan})
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-surface-container-lowest p-4 sm:p-5 rounded-2xl border border-outline-variant/40">
+          <span className="text-[11px] font-bold uppercase text-on-surface-variant block mb-1">
+            Saldo Kas Bersih
           </span>
-          <p className="text-2xl font-extrabold text-on-surface">
+          <p className="text-lg sm:text-2xl font-extrabold text-on-surface">
             {formatRupiah(saldoAkhir)}
           </p>
         </div>
 
-        <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/40">
-          <span className="text-xs font-bold uppercase text-on-surface-variant block mb-1">
+        <div className="bg-surface-container-lowest p-4 sm:p-5 rounded-2xl border border-outline-variant/40">
+          <span className="text-[11px] font-bold uppercase text-on-surface-variant block mb-1">
             Total Pemasukan
           </span>
-          <p className="text-2xl font-extrabold text-emerald-600">
+          <p className="text-lg sm:text-2xl font-extrabold text-emerald-600">
             {formatRupiah(totalPemasukan)}
           </p>
         </div>
 
-        <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/40">
-          <span className="text-xs font-bold uppercase text-on-surface-variant block mb-1">
+        <div className="bg-surface-container-lowest p-4 sm:p-5 rounded-2xl border border-outline-variant/40">
+          <span className="text-[11px] font-bold uppercase text-on-surface-variant block mb-1">
             Total Pengeluaran
           </span>
-          <p className="text-2xl font-extrabold text-rose-600">
+          <p className="text-lg sm:text-2xl font-extrabold text-rose-600">
             {formatRupiah(totalPengeluaran)}
           </p>
         </div>
 
-        <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/40">
-          <span className="text-xs font-bold uppercase text-on-surface-variant block mb-1">
-            Tingkat Kepatuhan Iuran
+        <div className="bg-surface-container-lowest p-4 sm:p-5 rounded-2xl border border-outline-variant/40">
+          <span className="text-[11px] font-bold uppercase text-on-surface-variant block mb-1">
+            Kepatuhan ({activeSessionId})
           </span>
-          <p className="text-2xl font-extrabold text-secondary">
+          <p className="text-lg sm:text-2xl font-extrabold text-secondary">
             {kepatuhanPersen}% ({lunasCount}/{members.length})
           </p>
         </div>
       </div>
 
-      {/* Tabel Rekapitulasi Per Seksi */}
+      {/* Rekapitulasi Per Seksi */}
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs overflow-hidden">
         <div className="p-4 border-b border-outline-variant/40">
           <h2 className="text-base font-extrabold text-on-surface">
-            Rekapitulasi Iuran per Seksi — Angkatan {activeAngkatan}
+            Rekapitulasi Iuran per Seksi ({activeSessionId}) — Angkatan {activeAngkatan}
           </h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs sm:text-sm">
             <thead className="bg-surface-container-low text-on-surface-variant uppercase text-[11px] border-b border-outline-variant/40">
               <tr>
-                <th className="py-3 px-4">Seksi Instrumen</th>
+                <th className="py-3 px-4">Seksi Resmi</th>
                 <th className="py-3 px-4 text-center">Jumlah Siswa</th>
-                <th className="py-3 px-4 text-center">Sudah Lunas</th>
-                <th className="py-3 px-4 text-center">Belum Bayar</th>
-                <th className="py-3 px-4 text-right">Persentase</th>
+                <th className="py-3 px-4 text-center">Lunas</th>
+                <th className="py-3 px-4 text-center">Belum</th>
+                <th className="py-3 px-4 text-right">%</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/20">
-              {sections.map((sec) => {
-                const secMembers = members.filter((m) => m.section === sec);
-                const secLunas = secMembers.filter(
-                  (m) => m.duesStatus === 'LUNAS'
+              {SECTION_NAMES.map((sec) => {
+                const secMembers = members.filter(
+                  (m) => m.section.toUpperCase() === sec
+                );
+                const secLunas = secMembers.filter((m) =>
+                  (m.paidSessions || []).includes(activeSessionId)
                 ).length;
                 const secBelum = secMembers.length - secLunas;
                 const pct =
@@ -155,44 +158,35 @@ export default function LaporanKeuanganPage() {
             Belum ada data transaksi untuk dilaporkan pada Angkatan {activeAngkatan}.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs sm:text-sm">
-              <thead className="bg-surface-container-low text-on-surface-variant uppercase text-[11px] border-b border-outline-variant/40">
-                <tr>
-                  <th className="py-3 px-4">Tanggal</th>
-                  <th className="py-3 px-4">No. Bukti</th>
-                  <th className="py-3 px-4">Kategori</th>
-                  <th className="py-3 px-4">Uraian</th>
-                  <th className="py-3 px-4 text-right">Nominal</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant/20">
-                {transactions.map((t) => (
-                  <tr key={t.id}>
-                    <td className="py-3 px-4 whitespace-nowrap text-on-surface-variant">
-                      {t.transactionDate}
-                    </td>
-                    <td className="py-3 px-4 font-mono font-semibold text-on-surface">
-                      {t.referenceNo}
-                    </td>
-                    <td className="py-3 px-4">{t.category}</td>
-                    <td className="py-3 px-4 font-semibold text-on-surface">
-                      {t.description}
-                    </td>
-                    <td
-                      className={`py-3 px-4 text-right font-extrabold whitespace-nowrap ${
-                        t.type === 'pemasukan'
-                          ? 'text-emerald-600'
-                          : 'text-rose-600'
-                      }`}
-                    >
-                      {t.type === 'pemasukan' ? '+' : '-'}
-                      {formatRupiah(t.amount)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="divide-y divide-outline-variant/20">
+            {transactions.map((t) => (
+              <div
+                key={t.id}
+                className="p-3.5 sm:px-4 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <span className="text-[10px] font-mono text-on-surface-variant">
+                    {t.transactionDate} • {t.referenceNo}
+                  </span>
+                  <p className="text-xs sm:text-sm font-bold text-on-surface truncate">
+                    {t.description}
+                  </p>
+                  <span className="text-[11px] text-on-surface-variant">
+                    {t.category}
+                  </span>
+                </div>
+                <span
+                  className={`text-xs sm:text-sm font-extrabold shrink-0 ${
+                    t.type === 'pemasukan'
+                      ? 'text-emerald-600'
+                      : 'text-rose-600'
+                  }`}
+                >
+                  {t.type === 'pemasukan' ? '+' : '-'}
+                  {formatRupiah(t.amount)}
+                </span>
+              </div>
+            ))}
           </div>
         )}
       </div>

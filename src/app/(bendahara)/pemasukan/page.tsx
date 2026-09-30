@@ -222,53 +222,91 @@ export default function PemasukanPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs sm:text-sm">
-                <thead className="bg-surface-container-low text-on-surface-variant uppercase text-[11px] border-b border-outline-variant/40">
-                  <tr>
-                    <th className="py-3 px-4">Tanggal</th>
-                    <th className="py-3 px-4">No. Bukti</th>
-                    <th className="py-3 px-4">Uraian & Kategori</th>
-                    <th className="py-3 px-4 text-right">Nominal</th>
-                    {canEdit && <th className="py-3 px-4 text-right">Aksi</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant/20">
-                  {incomeList.map((t) => (
-                    <tr key={t.id} className="hover:bg-surface-container-low/50">
-                      <td className="py-3 px-4 whitespace-nowrap text-on-surface-variant">
-                        {t.transactionDate}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-semibold text-on-surface whitespace-nowrap">
-                        {t.referenceNo}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-bold text-on-surface block">
+            <>
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-xs sm:text-sm">
+                  <thead className="bg-surface-container-low text-on-surface-variant uppercase text-[11px] border-b border-outline-variant/40">
+                    <tr>
+                      <th className="py-3 px-4">Tanggal</th>
+                      <th className="py-3 px-4">No. Bukti</th>
+                      <th className="py-3 px-4">Uraian & Kategori</th>
+                      <th className="py-3 px-4 text-right">Nominal</th>
+                      {canEdit && <th className="py-3 px-4 text-right">Aksi</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/20">
+                    {incomeList.map((t) => (
+                      <tr key={t.id} className="hover:bg-surface-container-low/50">
+                        <td className="py-3 px-4 whitespace-nowrap text-on-surface-variant">
+                          {t.transactionDate}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-semibold text-on-surface whitespace-nowrap">
+                          {t.referenceNo}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-bold text-on-surface block">
+                            {t.description}
+                          </span>
+                          <span className="text-xs text-on-surface-variant">
+                            {t.category} • Penyetor: {t.vendor}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right font-extrabold text-emerald-600 whitespace-nowrap">
+                          +{formatRupiah(t.amount)}
+                        </td>
+                        {canEdit && (
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => deleteTransaction(t.id)}
+                              className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
+                            >
+                              Hapus
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Card List (Tanpa Geser Layar) */}
+              <div className="md:hidden divide-y divide-outline-variant/30">
+                {incomeList.map((t) => (
+                  <div key={t.id} className="p-4 flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-[11px] font-mono text-on-surface-variant block">
+                          {t.transactionDate} • {t.referenceNo}
+                        </span>
+                        <p className="font-extrabold text-sm text-on-surface">
                           {t.description}
-                        </span>
-                        <span className="text-xs text-on-surface-variant">
+                        </p>
+                        <p className="text-xs text-on-surface-variant mt-0.5">
                           {t.category} • Penyetor: {t.vendor}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-extrabold text-sm text-emerald-600 block">
+                          +{formatRupiah(t.amount)}
                         </span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-extrabold text-emerald-600 whitespace-nowrap">
-                        +{formatRupiah(t.amount)}
-                      </td>
-                      {canEdit && (
-                        <td className="py-3 px-4 text-right">
+                        {canEdit && (
                           <button
                             type="button"
                             onClick={() => deleteTransaction(t.id)}
-                            className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
+                            className="mt-1.5 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 font-bold text-[11px] cursor-pointer"
                           >
                             Hapus
                           </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
