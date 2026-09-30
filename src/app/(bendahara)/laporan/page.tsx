@@ -18,9 +18,6 @@ export default function LaporanKeuanganPage() {
     activeMonth,
     setActiveMonth,
     monthlySessionCount,
-    sessions,
-    activeSessionId,
-    setActiveSessionId,
     duesNominal,
     members,
     transactions,
@@ -35,16 +32,22 @@ export default function LaporanKeuanganPage() {
     setActiveMonth(`${newYear}-${newMonthNum}`);
   };
 
-  const lunasCount = members.filter((m) =>
-    (m.paidSessions || []).includes(activeSessionId)
+  // Rekapan selama 1 bulan penuh (P1 s/d P{monthlySessionCount})
+  const lunasPenuhCount = members.filter(
+    (m) => (m.paidSessions?.length || 0) >= monthlySessionCount
   ).length;
-  const kepatuhanPersen =
-    members.length > 0 ? Math.round((lunasCount / members.length) * 100) : 0;
+  const belumPenuhCount = members.length - lunasPenuhCount;
 
   const totalPaidOccurrencesInMonth = members.reduce(
     (acc, m) => acc + (m.paidSessions?.length || 0),
     0
   );
+  const targetMaxOccurrencesInMonth = members.length * monthlySessionCount;
+  const capaianBulanPersen =
+    targetMaxOccurrencesInMonth > 0
+      ? Math.round((totalPaidOccurrencesInMonth / targetMaxOccurrencesInMonth) * 100)
+      : 0;
+
   const totalIuranBulanIni = totalPaidOccurrencesInMonth * duesNominal;
 
   const formattedPrintDate = new Date().toLocaleDateString('id-ID', {
@@ -100,18 +103,6 @@ export default function LaporanKeuanganPage() {
             ))}
           </select>
 
-          <select
-            value={activeSessionId}
-            onChange={(e) => setActiveSessionId(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-outline-variant bg-white text-xs font-bold text-on-surface outline-none"
-          >
-            {sessions.map((s) => (
-              <option key={s.id} value={s.id}>
-                Evaluasi {s.id}
-              </option>
-            ))}
-          </select>
-
           <button
             type="button"
             onClick={handlePrint}
@@ -132,13 +123,13 @@ export default function LaporanKeuanganPage() {
         {/* 1. KOP SURAT RESMI MARCHING BAND GEMA TARUNA */}
         <div className="border-b-4 border-double border-slate-900 pb-4 flex items-center gap-4">
           <img
-            src="/logo.png"
+            src="/logo-new.png"
             alt="Logo Marching Band Gema Taruna"
             className="w-16 h-16 sm:w-20 sm:h-20 object-contain shrink-0"
           />
           <div className="flex-1 text-center sm:pr-12">
             <p className="text-xs sm:text-sm font-extrabold uppercase tracking-widest text-slate-700">
-              ORGANISASI EKSTRAKURIKULER MARCHING BAND
+              PASUKAN KHUSUS MARCHING BAND
             </p>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-950 uppercase">
               MARCHING BAND GEMA TARUNA
@@ -230,16 +221,16 @@ export default function LaporanKeuanganPage() {
                 {formatRupiah(totalIuranBulanIni)}
               </p>
               <span className="text-[10px] text-slate-500 block">
-                {totalPaidOccurrencesInMonth}x pembayaran • {activeSessionId}: {kepatuhanPersen}%
+                {totalPaidOccurrencesInMonth}x pembayaran ({capaianBulanPersen}% tercapai)
               </span>
             </div>
           </div>
         </div>
 
-        {/* 4. BAGIAN II: REKAPITULASI IURAN PER SEKSI RESMI */}
+        {/* 4. BAGIAN II: REKAPITULASI IURAN PER SEKSI SELAMA 1 BULAN */}
         <div>
           <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-900 mb-2">
-            II. Rekapitulasi Iuran Anggota per Seksi — {formatMonthLabel(activeMonth)}
+            II. Rekapitulasi Iuran Anggota per Seksi — Bulan {formatMonthLabel(activeMonth)} ({monthlySessionCount}x Pertemuan)
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse border border-slate-400 text-xs">
@@ -255,10 +246,10 @@ export default function LaporanKeuanganPage() {
                     Jml Siswa
                   </th>
                   <th className="border border-slate-400 py-2 px-2.5 text-center">
-                    Lunas ({activeSessionId})
+                    Lunas Penuh ({monthlySessionCount}x)
                   </th>
                   <th className="border border-slate-400 py-2 px-2.5 text-center">
-                    Belum ({activeSessionId})
+                    Belum Penuh
                   </th>
                   <th className="border border-slate-400 py-2 px-2.5 text-center">
                     Total Bayar (P1–P{monthlySessionCount})
@@ -273,10 +264,10 @@ export default function LaporanKeuanganPage() {
                   const secMembers = members.filter(
                     (m) => m.section.toUpperCase() === sec
                   );
-                  const secLunas = secMembers.filter((m) =>
-                    (m.paidSessions || []).includes(activeSessionId)
+                  const secLunasPenuh = secMembers.filter(
+                    (m) => (m.paidSessions?.length || 0) >= monthlySessionCount
                   ).length;
-                  const secBelum = secMembers.length - secLunas;
+                  const secBelumPenuh = secMembers.length - secLunasPenuh;
                   const secTotalPaidSessions = secMembers.reduce(
                     (acc, m) => acc + (m.paidSessions?.length || 0),
                     0
@@ -295,10 +286,10 @@ export default function LaporanKeuanganPage() {
                         {secMembers.length}
                       </td>
                       <td className="border border-slate-400 py-1.5 px-2.5 text-center font-bold text-emerald-700">
-                        {secLunas}
+                        {secLunasPenuh}
                       </td>
                       <td className="border border-slate-400 py-1.5 px-2.5 text-center font-bold text-rose-700">
-                        {secBelum}
+                        {secBelumPenuh}
                       </td>
                       <td className="border border-slate-400 py-1.5 px-2.5 text-center font-semibold">
                         {secTotalPaidSessions}x bayar
@@ -316,16 +307,16 @@ export default function LaporanKeuanganPage() {
                     colSpan={2}
                     className="border border-slate-400 py-2 px-3 text-right uppercase"
                   >
-                    Total Keseluruhan
+                    Total Keseluruhan Bulan {formatMonthLabel(activeMonth)}
                   </td>
                   <td className="border border-slate-400 py-2 px-2.5 text-center">
                     {members.length}
                   </td>
                   <td className="border border-slate-400 py-2 px-2.5 text-center text-emerald-700">
-                    {lunasCount}
+                    {lunasPenuhCount}
                   </td>
                   <td className="border border-slate-400 py-2 px-2.5 text-center text-rose-700">
-                    {members.length - lunasCount}
+                    {belumPenuhCount}
                   </td>
                   <td className="border border-slate-400 py-2 px-2.5 text-center">
                     {totalPaidOccurrencesInMonth}x bayar
