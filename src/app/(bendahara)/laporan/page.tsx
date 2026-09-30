@@ -120,14 +120,14 @@ export default function LaporanKeuanganPage() {
           LEMBAR DOKUMEN RESMI LPJ (TAMPIL DI PRATINJAU & DICETAK BERSIH KE PDF)
       ===================================================================== */}
       <div className="bg-white text-slate-900 rounded-2xl print:rounded-none border border-slate-300 print:border-none shadow-md print:shadow-none p-5 sm:p-10 print:p-2 space-y-6">
-        {/* 1. KOP SURAT RESMI MARCHING BAND GEMA TARUNA */}
-        <div className="border-b-4 border-double border-slate-900 pb-4 flex items-center gap-4">
+        {/* 1. KOP SURAT RESMI MARCHING BAND GEMA TARUNA (LOGO KIRI - JUDUL KOP - LOGO KANAN) */}
+        <div className="border-b-4 border-double border-slate-900 pb-4 flex items-center justify-between gap-3 sm:gap-6">
           <img
-            src="/logo-new.png"
-            alt="Logo Marching Band Gema Taruna"
+            src="/logo-taruna.png"
+            alt="Logo Taruna"
             className="w-16 h-16 sm:w-20 sm:h-20 object-contain shrink-0"
           />
-          <div className="flex-1 text-center sm:pr-12">
+          <div className="flex-1 text-center">
             <p className="text-xs sm:text-sm font-extrabold uppercase tracking-widest text-slate-700">
               PASUKAN KHUSUS MARCHING BAND
             </p>
@@ -141,6 +141,11 @@ export default function LaporanKeuanganPage() {
               LAPORAN PERTANGGUNGJAWABAN (LPJ) KEUANGAN KAS — ANGKATAN {activeAngkatan} (MB{activeAngkatan})
             </p>
           </div>
+          <img
+            src="/logo-new.png"
+            alt="Logo Marching Band Gema Taruna"
+            className="w-16 h-16 sm:w-20 sm:h-20 object-contain shrink-0"
+          />
         </div>
 
         {/* 2. METADATA LAPORAN */}
