@@ -13,19 +13,25 @@ export default function BendaharaLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background text-on-surface font-sans flex flex-col">
-      <BendaharaSidebar
-        isOpen={mobileMenuOpen}
-        onClose={() => setMobileMenuOpen(false)}
-      />
-      <div className="flex-1 flex flex-col lg:pl-72 min-h-screen">
-        <BendaharaHeader onOpenMobileMenu={() => setMobileMenuOpen(true)} />
-        <main className="flex-1 pt-16 flex flex-col justify-between">
+    <div className="min-h-screen bg-background print:bg-white text-on-surface font-sans flex flex-col">
+      <div className="print:hidden">
+        <BendaharaSidebar
+          isOpen={mobileMenuOpen}
+          onClose={() => setMobileMenuOpen(false)}
+        />
+      </div>
+      <div className="flex-1 flex flex-col lg:pl-72 print:pl-0 min-h-screen">
+        <div className="print:hidden">
+          <BendaharaHeader onOpenMobileMenu={() => setMobileMenuOpen(true)} />
+        </div>
+        <main className="flex-1 pt-16 print:pt-0 flex flex-col justify-between">
           <div>
-            <AngkatanLedgerBanner />
+            <div className="print:hidden">
+              <AngkatanLedgerBanner />
+            </div>
             {children}
           </div>
-          <footer className="py-4 px-4 sm:px-6 text-center text-xs text-on-surface-variant border-t border-outline-variant/40 bg-surface-container-lowest">
+          <footer className="print:hidden py-4 px-4 sm:px-6 text-center text-xs text-on-surface-variant border-t border-outline-variant/40 bg-surface-container-lowest">
             <span>© 2026 Marching Band Gema Taruna • </span>
             <a
               href="https://www.instagram.com/novano007"
