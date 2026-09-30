@@ -9,9 +9,9 @@ export type AppRole = 'superadmin' | 'admin_angkatan' | 'siswa';
 export const SECTION_OPTIONS: Record<string, string[]> = {
   'BRASS': ['Terompet', 'Bariton'],
   'PERCUSSION': ['Bass Drum', 'Snare Drum', 'Tenor', 'Simbal'],
-  'PIT INSTRUMENT': ['Belira', 'Instrumen Statis Lainnya'],
-  'COLOR GUARD': ['Bendera & Visual Performance'],
-  'LEADERSHIP': ['Field Commander', 'Stickmaster Taruna/i'],
+  'PIT INSTRUMENT': ['Belira'],
+  'COLOR GUARD': ['Bendera'],
+  'LEADERSHIP': ['Field Commander', 'Stickmaster Taruna', 'Stickmaster Taruni'],
 };
 
 export const SECTION_NAMES = Object.keys(SECTION_OPTIONS);

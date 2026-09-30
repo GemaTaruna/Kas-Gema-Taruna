@@ -25,7 +25,6 @@ export default function AnggotaPage() {
   const [importMsg, setImportMsg] = useState('');
 
   // Form tambah anggota
-  const [noUrut, setNoUrut] = useState('');
   const [fullName, setFullName] = useState('');
   const [kelas, setKelas] = useState('');
   const [section, setSection] = useState<string>('BRASS');
@@ -53,10 +52,8 @@ export default function AnggotaPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) return;
-    const seq = noUrut.trim() || String(members.length + 1).padStart(2, '0');
-    const code = seq.toUpperCase().startsWith('MB')
-      ? seq
-      : `MB${activeAngkatan}-${seq.padStart(2, '0')}`;
+    const seq = String(members.length + 1).padStart(2, '0');
+    const code = `MB${activeAngkatan}-${seq}`;
 
     await addMember({
       memberCode: code,
@@ -69,7 +66,6 @@ export default function AnggotaPage() {
       duesAmount: duesNominal,
     });
 
-    setNoUrut('');
     setFullName('');
     setKelas('');
     setPhone('');
@@ -404,40 +400,12 @@ export default function AnggotaPage() {
               </p>
               <p><strong>BRASS:</strong> TEROMPET, BARITON</p>
               <p><strong>PERCUSSION:</strong> BASS DRUM, SNARE DRUM, TENOR, SIMBAL</p>
-              <p><strong>PIT INSTRUMENT:</strong> BELIRA (DAN INSTRUMEN STATIS LAINNYA)</p>
-              <p><strong>COLOR GUARD:</strong> BENDERA & VISUAL PERFORMANCE</p>
-              <p><strong>LEADERSHIP:</strong> FIELD COMMANDER, STICKMASTER TARUNA/I</p>
+              <p><strong>PIT INSTRUMENT:</strong> BELIRA</p>
+              <p><strong>COLOR GUARD:</strong> BENDERA</p>
+              <p><strong>LEADERSHIP:</strong> FIELD COMMANDER, STICKMASTER TARUNA, STICKMASTER TARUNI</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3 text-sm">
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    No. Urut
-                  </label>
-                  <input
-                    type="text"
-                    value={noUrut}
-                    onChange={(e) => setNoUrut(e.target.value)}
-                    placeholder={`${members.length + 1}`}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Kelas
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={kelas}
-                    onChange={(e) => setKelas(e.target.value)}
-                    placeholder="Contoh: X-1 / XI-2"
-                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm"
-                  />
-                </div>
-              </div>
-
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Nama Lengkap Siswa
@@ -448,6 +416,20 @@ export default function AnggotaPage() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Masukkan nama lengkap siswa"
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Kelas
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={kelas}
+                  onChange={(e) => setKelas(e.target.value)}
+                  placeholder="Contoh: X-1 / XI-2"
                   className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm"
                 />
               </div>
