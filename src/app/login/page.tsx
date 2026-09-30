@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ANGKATAN_LIST, AngkatanId, useAngkatan } from '@/context/AngkatanContext';
 
 export default function LoginPage() {
-  const [activeTab, setActiveTab] = useState<'admin_angkatan' | 'superadmin' | 'cek_kas_siswa'>('admin_angkatan');
+  const [activeTab, setActiveTab] = useState<'admin_angkatan' | 'superadmin' | 'cek_kas_siswa'>('cek_kas_siswa');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -29,31 +29,28 @@ export default function LoginPage() {
       return;
     }
 
-    const isMobileViewport = typeof window !== 'undefined' && window.innerWidth < 768;
-    router.push(isMobileViewport ? '/mobile/dashboard' : '/dashboard');
+    router.push('/dashboard');
     router.refresh();
   };
 
   const handleStudentEnter = (angk?: AngkatanId) => {
     const targetAngkatan = angk || selectedStudentAngkatan;
     enterStudentMode(targetAngkatan);
-    const isMobileViewport = typeof window !== 'undefined' && window.innerWidth < 768;
-    router.push(isMobileViewport ? '/portal/ringkasan' : '/transparansi');
+    router.push('/transparansi');
     router.refresh();
   };
 
   return (
     <main className="flex-grow flex items-center justify-center p-0 lg:p-6 sm:p-4 min-h-screen bg-slate-50 text-slate-800 font-sans antialiased selection:bg-amber-400 selection:text-slate-900">
-      <div className="w-full max-w-7xl bg-white shadow-2xl rounded-none lg:rounded-3xl overflow-hidden border border-slate-200/80 flex flex-col lg:flex-row min-h-[720px]">
+      <div className="w-full max-w-6xl bg-white shadow-2xl rounded-none lg:rounded-3xl overflow-hidden border border-slate-200/80 flex flex-col lg:flex-row min-h-[680px]">
         {/* Left Brand Showcase */}
-        <section className="lg:w-5/12 bg-gradient-to-br from-slate-950 via-slate-900 to-[#0B1120] text-white p-8 lg:p-12 relative flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-800 overflow-hidden">
+        <section className="lg:w-5/12 bg-gradient-to-br from-slate-950 via-slate-900 to-[#0B1120] text-white p-6 sm:p-8 lg:p-12 relative flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-800 overflow-hidden">
           <div className="absolute -top-24 -left-24 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
           <div className="absolute bottom-10 right-0 w-80 h-80 bg-rose-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
           <div className="relative z-10">
-            {/* Logo Resmi Gema Taruna dari Imgur */}
-            <div className="inline-block transition-transform hover:scale-105 duration-300 mb-6">
-              <div className="w-24 h-24 bg-slate-800/90 border border-amber-500/30 rounded-2xl p-2 flex items-center justify-center shadow-2xl drop-shadow-[0_10px_15px_rgba(245,158,11,0.25)]">
+            <div className="inline-block transition-transform hover:scale-105 duration-300 mb-5">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-slate-800/90 border border-amber-500/30 rounded-2xl p-2 flex items-center justify-center shadow-2xl drop-shadow-[0_10px_15px_rgba(245,158,11,0.25)]">
                 <img
                   src="/logo.png"
                   alt="Logo Marching Band Gema Taruna"
@@ -67,21 +64,21 @@ export default function LoginPage() {
               Sistem Keuangan Multi-Angkatan (MB16 – MB21)
             </div>
 
-            <h1 className="text-3xl lg:text-4xl font-extrabold tracking-tight text-white mb-2 leading-tight">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white mb-2 leading-tight">
               KAS GEMA TARUNA
             </h1>
 
-            <p className="text-slate-400 text-sm lg:text-base font-normal leading-relaxed mb-8">
-              Disiplin Irama, Transparansi Finansial, Prestasi Marching Arts Indonesia. Pembukuan kas mandiri untuk masing-masing Angkatan 16 s.d. 21.
+            <p className="text-slate-400 text-xs sm:text-sm lg:text-base font-normal leading-relaxed mb-6">
+              Disiplin Irama, Transparansi Finansial, Prestasi Marching Arts Indonesia. Pembukuan kas terpisah secara mandiri untuk masing-masing Angkatan 16 s.d. 21.
             </p>
 
-            <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/70 rounded-2xl p-5 shadow-inner mb-6">
-              <div className="flex items-center justify-between border-b border-slate-700/60 pb-3 mb-4">
+            <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/70 rounded-2xl p-4 sm:p-5 shadow-inner mb-6">
+              <div className="flex items-center justify-between border-b border-slate-700/60 pb-3 mb-3">
                 <span className="text-xs uppercase tracking-wider font-semibold text-slate-400">
-                  Status Pembukuan Angkatan
+                  Pembukuan Mandiri Per Angkatan
                 </span>
                 <span className="inline-flex items-center text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                  ● 6 Angkatan Aktif
+                  ● Aktif
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
@@ -98,19 +95,19 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="relative z-10 pt-6 border-t border-slate-700/50">
-            <div className="flex items-start gap-4">
+          <div className="relative z-10 pt-4 border-t border-slate-700/50">
+            <div className="flex items-start gap-3">
               <img
                 src="/logo.png"
                 alt="MBGT"
-                className="w-11 h-11 rounded-full bg-slate-800 p-1 object-contain border border-slate-600 shrink-0"
+                className="w-10 h-10 rounded-full bg-slate-800 p-1 object-contain border border-slate-600 shrink-0"
               />
               <div>
-                <p className="text-sm italic text-slate-300 leading-snug mb-1">
+                <p className="text-xs sm:text-sm italic text-slate-300 leading-snug mb-1">
                   &ldquo;Setiap angkatan memiliki pembukuan kas tersendiri yang transparan, terpantau langsung oleh Pembina dan seluruh Siswa.&rdquo;
                 </p>
                 <p className="text-xs font-semibold text-amber-400">
-                  Marching Band Gema Taruna <span className="text-slate-400 font-normal">— Sistem Akuntabilitas Kas</span>
+                  Marching Band Gema Taruna
                 </p>
               </div>
             </div>
@@ -118,14 +115,14 @@ export default function LoginPage() {
         </section>
 
         {/* Right Form Panel */}
-        <section className="lg:w-7/12 p-8 lg:p-14 bg-white flex flex-col justify-center relative">
+        <section className="lg:w-7/12 p-6 sm:p-8 lg:p-14 bg-white flex flex-col justify-center relative">
           <div className="max-w-md w-full mx-auto">
             <div className="mb-6 text-center sm:text-left">
-              <h2 className="text-2xl font-bold text-slate-900 tracking-tight mb-1.5">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mb-1.5">
                 Portal Akses Kas Gema Taruna
               </h2>
-              <p className="text-slate-500 text-sm">
-                Pilih tab akses di bawah ini. Siswa dapat langsung mengecek kas tanpa kata sandi.
+              <p className="text-slate-500 text-xs sm:text-sm">
+                Pilih tab akses di bawah ini. Siswa dapat langsung mengecek kas angkatannya tanpa kata sandi.
               </p>
             </div>
 
@@ -179,24 +176,24 @@ export default function LoginPage() {
 
             {/* TAB 1: CEK KAS SISWA (TANPA LOGIN / TANPA SANDI) */}
             {activeTab === 'cek_kas_siswa' ? (
-              <div className="space-y-5 bg-emerald-50/60 border border-emerald-200 rounded-2xl p-5">
+              <div className="space-y-5 bg-emerald-50/60 border border-emerald-200 rounded-2xl p-4 sm:p-5">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 font-bold">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 font-bold">
                     ✓
                   </div>
                   <div>
                     <h3 className="text-sm font-extrabold text-slate-900">
-                      Akses Langsung Siswa / Anggota (Tanpa Kata Sandi)
+                      Cek Kas Siswa (Tanpa Kata Sandi)
                     </h3>
                     <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                      Siswa tidak memerlukan akun atau kata sandi. Pilih angkatan Anda di bawah ini untuk langsung melihat pembukuan kas & status iuran (Mode Khusus <strong>Hanya Membaca</strong>).
+                      Pilih angkatan Anda di bawah ini untuk langsung melihat buku kas & daftar iuran angkatan Anda (Mode Khusus <strong>Hanya Membaca</strong>).
                     </p>
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                    Pilih Angkatan Anda:
+                    Pilih Angkatan:
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     {ANGKATAN_LIST.map((angk) => {
@@ -233,7 +230,7 @@ export default function LoginPage() {
                   onClick={() => handleStudentEnter(selectedStudentAngkatan)}
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 px-6 rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm cursor-pointer"
                 >
-                  <span>Masuk & Lihat Kas Angkatan {selectedStudentAngkatan} (Hanya Baca)</span>
+                  <span>Buka Kas Angkatan {selectedStudentAngkatan}</span>
                   <span>→</span>
                 </button>
               </div>
@@ -246,14 +243,14 @@ export default function LoginPage() {
                       <strong className="text-slate-900 block mb-0.5">
                         🛡️ Mode Super Admin (Pembina)
                       </strong>
-                      Masuk dengan akun Pembina (<strong>Gema Taruna</strong>) untuk mengisi, memantau, dan mengedit pembukuan seluruh Angkatan 16 s.d. 21.
+                      Masuk dengan akun Pembina untuk mengisi, memantau, dan mengedit pembukuan seluruh Angkatan 16 s.d. 21.
                     </>
                   ) : (
                     <>
                       <strong className="text-slate-900 block mb-0.5">
-                        📒 Mode Admin Bendahara Angkatan (MB16 – MB21)
+                        📒 Mode Admin Angkatan (MB16 – MB21)
                       </strong>
-                      Masuk dengan akun angkatan Anda (<strong>MB16</strong>, <strong>MB17</strong>, <strong>MB18</strong>, <strong>MB19</strong>, <strong>MB20</strong>, atau <strong>MB21</strong>). Pembukuan tiap angkatan terpisah secara mandiri.
+                      Masuk dengan akun angkatan Anda (<strong>MB16</strong> s.d. <strong>MB21</strong>). Pembukuan tiap angkatan terpisah secara mandiri.
                     </>
                   )}
                 </div>
@@ -271,7 +268,7 @@ export default function LoginPage() {
                   >
                     {activeTab === 'superadmin'
                       ? 'Akun Super Admin (Pembina)'
-                      : 'Akun Admin Angkatan (MB16 s.d. MB21)'}
+                      : 'Akun Admin Angkatan'}
                   </label>
                   <input
                     id="identifier-input"
@@ -282,8 +279,8 @@ export default function LoginPage() {
                     className="block w-full px-4 py-2.5 sm:py-3 text-slate-900 placeholder-slate-400 text-sm border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition shadow-sm outline-none border"
                     placeholder={
                       activeTab === 'superadmin'
-                        ? 'Ketik: Gema Taruna'
-                        : 'Ketik: MB16 / MB17 / MB18 / MB19 / MB20 / MB21'
+                        ? 'Masukkan Akun Super Admin'
+                        : 'Contoh: MB16, MB17, MB18, MB19, MB20, MB21'
                     }
                   />
                 </div>
@@ -303,7 +300,7 @@ export default function LoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="block w-full pl-4 pr-11 py-2.5 sm:py-3 text-slate-900 placeholder-slate-400 text-sm border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition shadow-sm outline-none border"
-                      placeholder="Masukkan Kata Sandi Resmi"
+                      placeholder="Masukkan Kata Sandi"
                     />
                     <button
                       type="button"
@@ -325,7 +322,7 @@ export default function LoginPage() {
                       {loading
                         ? 'Memverifikasi...'
                         : activeTab === 'superadmin'
-                        ? 'Masuk sebagai Super Admin (Pembina)'
+                        ? 'Masuk sebagai Super Admin'
                         : 'Masuk ke Buku Kas Angkatan'}
                     </span>
                     <span>→</span>
@@ -334,11 +331,9 @@ export default function LoginPage() {
               </form>
             )}
 
-            {/* Footer Credit @novano007 - 2026 */}
             <div className="mt-8 pt-4 border-t border-slate-100 text-center text-xs text-slate-400 space-y-1">
               <p>© 2026 Marching Band Gema Taruna. Dilindungi Hak Cipta.</p>
               <p>
-                Developed by{' '}
                 <a
                   href="https://www.instagram.com/novano007"
                   target="_blank"

@@ -10,7 +10,7 @@ export interface AccountInfo {
   username: string;
   password?: string;
   role: AppRole;
-  angkatan: AngkatanId | null; // null = Super Admin (bisa akses & edit semua angkatan 16-21)
+  angkatan: AngkatanId | null;
   displayName: string;
 }
 
@@ -57,104 +57,61 @@ export const OFFICIAL_ACCOUNTS: AccountInfo[] = [
     password: 'Satutekad',
     role: 'admin_angkatan',
     angkatan: '16',
-    displayName: 'Admin Bendahara Angkatan 16',
+    displayName: 'Admin Angkatan 16',
   },
   {
     username: 'MB17',
     password: 'Satusemangat',
     role: 'admin_angkatan',
     angkatan: '17',
-    displayName: 'Admin Bendahara Angkatan 17',
+    displayName: 'Admin Angkatan 17',
   },
   {
     username: 'MB18',
     password: 'Marchinghebat',
     role: 'admin_angkatan',
     angkatan: '18',
-    displayName: 'Admin Bendahara Angkatan 18',
+    displayName: 'Admin Angkatan 18',
   },
   {
     username: 'MB19',
     password: 'Satutekad',
     role: 'admin_angkatan',
     angkatan: '19',
-    displayName: 'Admin Bendahara Angkatan 19',
+    displayName: 'Admin Angkatan 19',
   },
   {
     username: 'MB20',
     password: 'Satusemangat',
     role: 'admin_angkatan',
     angkatan: '20',
-    displayName: 'Admin Bendahara Angkatan 20',
+    displayName: 'Admin Angkatan 20',
   },
   {
     username: 'MB21',
     password: 'Marchinghebat',
     role: 'admin_angkatan',
     angkatan: '21',
-    displayName: 'Admin Bendahara Angkatan 21',
+    displayName: 'Admin Angkatan 21',
   },
 ];
 
-// Data awal terpisah untuk masing-masing Angkatan 16 s.d. 21
-const INITIAL_MEMBERS_BY_ANGKATAN: Record<AngkatanId, MemberItem[]> = {
-  '16': [
-    { id: 'm16-1', angkatan: '16', memberCode: 'MB16-01', fullName: 'Raka Pratama Putra', section: 'Brass', instrument: 'Trumpet 1', phone: '081234560016', status: 'Aktif', duesStatus: 'LUNAS', paidAt: '24 Sep 2026', duesAmount: 50000 },
-    { id: 'm16-2', angkatan: '16', memberCode: 'MB16-02', fullName: 'Nadia Kusuma Wardhani', section: 'Color Guard', instrument: 'Flag & Rifle', phone: '081234560116', status: 'Aktif', duesStatus: 'LUNAS', paidAt: '23 Sep 2026', duesAmount: 50000 },
-    { id: 'm16-3', angkatan: '16', memberCode: 'MB16-03', fullName: 'Fajar Sidiq Nugroho', section: 'Percussion', instrument: 'Snare Drum', phone: '081234560216', status: 'Aktif', duesStatus: 'BELUM BAYAR', paidAt: '-', duesAmount: 50000 },
-  ],
-  '17': [
-    { id: 'm17-1', angkatan: '17', memberCode: 'MB17-01', fullName: 'Bagas Arya Santoso', section: 'Percussion', instrument: 'Quinto / Tenor', phone: '081234560017', status: 'Aktif', duesStatus: 'LUNAS', paidAt: '22 Sep 2026', duesAmount: 50000 },
-    { id: 'm17-2', angkatan: '17', memberCode: 'MB17-02', fullName: 'Aulia Rahma Dewi', section: 'Pit Instrument', instrument: 'Marimba', phone: '081234560117', status: 'Aktif', duesStatus: 'LUNAS', paidAt: '21 Sep 2026', duesAmount: 50000 },
-    { id: 'm17-3', angkatan: '17', memberCode: 'MB17-03', fullName: 'Reza Aditya Saputra', section: 'Brass', instrument: 'Mellophone', phone: '081234560217', status: 'Aktif', duesStatus: 'BELUM BAYAR', paidAt: '-', duesAmount: 50000 },
-  ],
-  '18': [
-    { id: 'm18-1', angkatan: '18', memberCode: 'MB18-01', fullName: 'Dimas Wahyu Pratama', section: 'Brass', instrument: 'Lead Trumpet', phone: '081234560018', status: 'Aktif', duesStatus: 'LUNAS', paidAt: '24 Sep 2026', duesAmount: 50000 },
-    { id: 'm18-2', angkatan: '18', memberCode: 'MB18-02', fullName: 'Siti Nurhaliza Putri', section: 'Color Guard', instrument: 'Sabre', phone: '081234560118', status: 'Aktif', duesStatus: 'LUNAS', paidAt: '20 Sep 2026', duesAmount: 50000 },
-    { id: 'm18-3', angkatan: '18', memberCode: 'MB18-03', fullName: 'Farhan Maulana', section: 'Brass', instrument: 'Baritone', phone: '081234560218', status: 'Aktif', duesStatus: 'BELUM BAYAR', paidAt: '-', duesAmount: 50000 },
-  ],
-  '19': [
-    { id: 'm19-1', angkatan: '19', memberCode: 'MB19-01', fullName: 'Gilang Ramadhan', section: 'Percussion', instrument: 'Bass Drum 1', phone: '081234560019', status: 'Aktif', duesStatus: 'LUNAS', paidAt: '24 Sep 2026', duesAmount: 50000 },
-    { id: 'm19-2', angkatan: '19', memberCode: 'MB19-02', fullName: 'Tiara Andini Larasati', section: 'Pit Instrument', instrument: 'Vibraphone', phone: '081234560119', status: 'Aktif', duesStatus: 'BELUM BAYAR', paidAt: '-', duesAmount: 50000 },
-    { id: 'm19-3', angkatan: '19', memberCode: 'MB19-03', fullName: 'Hendra Wijaya', section: 'Brass', instrument: 'Tuba / Contra', phone: '081234560219', status: 'Aktif', duesStatus: 'LUNAS', paidAt: '19 Sep 2026', duesAmount: 50000 },
-  ],
-  '20': [
-    { id: 'm20-1', angkatan: '20', memberCode: 'MB20-01', fullName: 'Naufal Dzakwan', section: 'Brass', instrument: 'Trumpet 2', phone: '081234560020', status: 'Aktif', duesStatus: 'LUNAS', paidAt: '24 Sep 2026', duesAmount: 50000 },
-    { id: 'm20-2', angkatan: '20', memberCode: 'MB20-02', fullName: 'Zahra Amelia', section: 'Color Guard', instrument: 'Flag Line', phone: '081234560120', status: 'Aktif', duesStatus: 'LUNAS', paidAt: '22 Sep 2026', duesAmount: 50000 },
-    { id: 'm20-3', angkatan: '20', memberCode: 'MB20-03', fullName: 'Ilham Kurniawan', section: 'Percussion', instrument: 'Snare Drum', phone: '081234560220', status: 'Aktif', duesStatus: 'BELUM BAYAR', paidAt: '-', duesAmount: 50000 },
-  ],
-  '21': [
-    { id: 'm21-1', angkatan: '21', memberCode: 'MB21-01', fullName: 'Arjuna Satria Muda', section: 'Brass', instrument: 'Mellophone', phone: '081234560021', status: 'Aktif', duesStatus: 'LUNAS', paidAt: '24 Sep 2026', duesAmount: 50000 },
-    { id: 'm21-2', angkatan: '21', memberCode: 'MB21-02', fullName: 'Keisya Maharani', section: 'Pit Instrument', instrument: 'Xylophone', phone: '081234560121', status: 'Aktif', duesStatus: 'BELUM BAYAR', paidAt: '-', duesAmount: 50000 },
-    { id: 'm21-3', angkatan: '21', memberCode: 'MB21-03', fullName: 'Bima Sakti Pratama', section: 'Percussion', instrument: 'Cymbal', phone: '081234560221', status: 'Aktif', duesStatus: 'LUNAS', paidAt: '23 Sep 2026', duesAmount: 50000 },
-  ],
+const EMPTY_MEMBERS_BY_ANGKATAN: Record<AngkatanId, MemberItem[]> = {
+  '16': [],
+  '17': [],
+  '18': [],
+  '19': [],
+  '20': [],
+  '21': [],
 };
 
-const INITIAL_TRANSACTIONS_BY_ANGKATAN: Record<AngkatanId, TransactionItem[]> = {
-  '16': [
-    { id: 't16-1', angkatan: '16', referenceNo: 'BKM-16-001', type: 'pemasukan', category: 'Iuran Anggota', description: 'Setoran Iuran Rutin Skuad Angkatan 16', vendor: 'Bendahara MB16', amount: 4200000, paymentMethod: 'Tunai Kas', recordedBy: 'MB16', transactionDate: '2026-09-20' },
-    { id: 't16-2', angkatan: '16', referenceNo: 'BKK-16-001', type: 'pengeluaran', category: 'Perawatan Alat', description: 'Servis Valve & Slide Brass Angkatan 16', vendor: 'Surya Musik', amount: 1150000, paymentMethod: 'Tunai Kas', recordedBy: 'MB16', transactionDate: '2026-09-22' },
-  ],
-  '17': [
-    { id: 't17-1', angkatan: '17', referenceNo: 'BKM-17-001', type: 'pemasukan', category: 'Iuran Anggota', description: 'Setoran Iuran Rutin Skuad Angkatan 17', vendor: 'Bendahara MB17', amount: 3850000, paymentMethod: 'Tunai Kas', recordedBy: 'MB17', transactionDate: '2026-09-19' },
-    { id: 't17-2', angkatan: '17', referenceNo: 'BKK-17-001', type: 'pengeluaran', category: 'Logistik Latihan', description: 'Konsumsi & Air Mineral Drill Angkatan 17', vendor: 'Agen Tirta', amount: 950000, paymentMethod: 'Tunai Kas', recordedBy: 'MB17', transactionDate: '2026-09-23' },
-  ],
-  '18': [
-    { id: 't18-1', angkatan: '18', referenceNo: 'BKM-18-001', type: 'pemasukan', category: 'Iuran Anggota', description: 'Setoran Iuran Kas Skuad Angkatan 18', vendor: 'Bendahara MB18', amount: 5400000, paymentMethod: 'Tunai Kas', recordedBy: 'MB18', transactionDate: '2026-09-18' },
-    { id: 't18-2', angkatan: '18', referenceNo: 'BKK-18-001', type: 'pengeluaran', category: 'Perawatan Alat', description: 'Pembelian Drumhead & Stick Battery Angkatan 18', vendor: 'Nada Perkusi', amount: 1650000, paymentMethod: 'Tunai Kas', recordedBy: 'MB18', transactionDate: '2026-09-24' },
-  ],
-  '19': [
-    { id: 't19-1', angkatan: '19', referenceNo: 'BKM-19-001', type: 'pemasukan', category: 'Iuran Anggota', description: 'Setoran Iuran Kas Skuad Angkatan 19', vendor: 'Bendahara MB19', amount: 3100000, paymentMethod: 'Tunai Kas', recordedBy: 'MB19', transactionDate: '2026-09-21' },
-    { id: 't19-2', angkatan: '19', referenceNo: 'BKK-19-001', type: 'pengeluaran', category: 'Kostum & Seragam', description: 'Perbaikan Aksesoris Plume & Guard Angkatan 19', vendor: 'Sanggar Busana', amount: 750000, paymentMethod: 'Tunai Kas', recordedBy: 'MB19', transactionDate: '2026-09-24' },
-  ],
-  '20': [
-    { id: 't20-1', angkatan: '20', referenceNo: 'BKM-20-001', type: 'pemasukan', category: 'Iuran Anggota', description: 'Setoran Iuran Kas Skuad Angkatan 20', vendor: 'Bendahara MB20', amount: 2750000, paymentMethod: 'Tunai Kas', recordedBy: 'MB20', transactionDate: '2026-09-20' },
-    { id: 't20-2', angkatan: '20', referenceNo: 'BKK-20-001', type: 'pengeluaran', category: 'Konsumsi Latihan', description: 'Galon & Logistik Lapangan Angkatan 20', vendor: 'Koperasi MBGT', amount: 520000, paymentMethod: 'Tunai Kas', recordedBy: 'MB20', transactionDate: '2026-09-23' },
-  ],
-  '21': [
-    { id: 't21-1', angkatan: '21', referenceNo: 'BKM-21-001', type: 'pemasukan', category: 'Iuran Anggota', description: 'Setoran Iuran Perdana Taruna Angkatan 21', vendor: 'Bendahara MB21', amount: 2150000, paymentMethod: 'Tunai Kas', recordedBy: 'MB21', transactionDate: '2026-09-22' },
-    { id: 't21-2', angkatan: '21', referenceNo: 'BKK-21-001', type: 'pengeluaran', category: 'ATK & Administrasi', description: 'Cetak Kartu Iuran & Modul Drill Angkatan 21', vendor: 'Prima Grafika', amount: 380000, paymentMethod: 'Tunai Kas', recordedBy: 'MB21', transactionDate: '2026-09-24' },
-  ],
+const EMPTY_TRANSACTIONS_BY_ANGKATAN: Record<AngkatanId, TransactionItem[]> = {
+  '16': [],
+  '17': [],
+  '18': [],
+  '19': [],
+  '20': [],
+  '21': [],
 };
 
 interface AngkatanContextValue {
@@ -164,8 +121,13 @@ interface AngkatanContextValue {
   lockedAngkatan: AngkatanId | null;
   activeAngkatan: AngkatanId;
   canEdit: boolean;
+  duesNominal: number;
+  setDuesNominal: (val: number) => void;
   setActiveAngkatan: (a: AngkatanId) => void;
-  loginWithCredentials: (usernameInput: string, passwordInput: string) => { ok: boolean; error?: string; account?: AccountInfo };
+  loginWithCredentials: (
+    usernameInput: string,
+    passwordInput: string
+  ) => { ok: boolean; error?: string; account?: AccountInfo };
   enterStudentMode: (angkatan: AngkatanId) => void;
   logout: () => void;
   members: MemberItem[];
@@ -173,10 +135,13 @@ interface AngkatanContextValue {
   totalPemasukan: number;
   totalPengeluaran: number;
   saldoAkhir: number;
-  addTransaction: (tx: Omit<TransactionItem, 'id' | 'angkatan' | 'referenceNo' | 'recordedBy'>) => Promise<void>;
+  addTransaction: (
+    tx: Omit<TransactionItem, 'id' | 'angkatan' | 'referenceNo' | 'recordedBy'>
+  ) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   addMember: (m: Omit<MemberItem, 'id' | 'angkatan'>) => Promise<void>;
-  toggleMemberDues: (id: string) => Promise<void>;
+  deleteMember: (id: string) => Promise<void>;
+  toggleMemberDues: (id: string, recordToCash?: boolean) => Promise<void>;
 }
 
 const AngkatanContext = createContext<AngkatanContextValue | null>(null);
@@ -193,12 +158,24 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
   const [displayName, setDisplayName] = useState<string>('Super Admin (Pembina)');
   const [lockedAngkatan, setLockedAngkatan] = useState<AngkatanId | null>(null);
   const [activeAngkatan, setActiveAngkatanState] = useState<AngkatanId>('16');
+  const [duesNominal, setDuesNominalState] = useState<number>(50000);
 
-  const [membersByAngkatan, setMembersByAngkatan] = useState<Record<AngkatanId, MemberItem[]>>(INITIAL_MEMBERS_BY_ANGKATAN);
-  const [txByAngkatan, setTxByAngkatan] = useState<Record<AngkatanId, TransactionItem[]>>(INITIAL_TRANSACTIONS_BY_ANGKATAN);
+  const [membersByAngkatan, setMembersByAngkatan] = useState<Record<AngkatanId, MemberItem[]>>(
+    EMPTY_MEMBERS_BY_ANGKATAN
+  );
+  const [txByAngkatan, setTxByAngkatan] = useState<Record<AngkatanId, TransactionItem[]>>(
+    EMPTY_TRANSACTIONS_BY_ANGKATAN
+  );
 
-  // Load session & localStorage data on mount
   useEffect(() => {
+    // Hapus cache dummy lama jika ada
+    try {
+      localStorage.removeItem('kgt_members_multi_v1');
+      localStorage.removeItem('kgt_tx_multi_v1');
+    } catch {
+      // ignore
+    }
+
     const savedRole = (getCookieValue('kgt_session_role') as AppRole) || 'superadmin';
     const savedUser = getCookieValue('kgt_session_user') || 'Gema Taruna';
     const savedDisplay = getCookieValue('kgt_session_display') || 'Super Admin (Pembina)';
@@ -213,81 +190,111 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       setActiveAngkatanState(savedActive);
     }
 
-    // Load local storage ledgers per angkatan
     try {
-      const storedMembers = localStorage.getItem('kgt_members_multi_v1');
+      const storedMembers = localStorage.getItem('kgt_real_members_v2');
       if (storedMembers) {
         setMembersByAngkatan(JSON.parse(storedMembers));
       }
-      const storedTx = localStorage.getItem('kgt_tx_multi_v1');
+      const storedTx = localStorage.getItem('kgt_real_tx_v2');
       if (storedTx) {
         setTxByAngkatan(JSON.parse(storedTx));
       }
+      const storedNominal = localStorage.getItem('kgt_dues_nominal_v2');
+      if (storedNominal) {
+        setDuesNominalState(Number(storedNominal) || 50000);
+      }
     } catch {
-      // ignore parse errors
+      // ignore
     }
 
-    // Also try fetching from Supabase if tables exist
     const fetchSupabaseData = async () => {
       try {
         const supabase = createClient();
-        const { data: dbMembers } = await (supabase as any).from('kgt_members').select('*').order('created_at', { ascending: true });
-        if (dbMembers && dbMembers.length > 0) {
-          const grouped: Record<AngkatanId, MemberItem[]> = { ...INITIAL_MEMBERS_BY_ANGKATAN };
+        const { data: dbMembers } = await (supabase as any)
+          .from('kgt_members')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        if (dbMembers) {
+          const grouped: Record<AngkatanId, MemberItem[]> = {
+            '16': [],
+            '17': [],
+            '18': [],
+            '19': [],
+            '20': [],
+            '21': [],
+          };
           ANGKATAN_LIST.forEach((a) => {
             const list = dbMembers.filter((m: any) => m.angkatan === a);
-            if (list.length > 0) {
-              grouped[a] = list.map((m: any) => ({
-                id: m.id,
-                angkatan: m.angkatan,
-                memberCode: m.member_code,
-                fullName: m.full_name,
-                section: m.section,
-                instrument: m.instrument || '-',
-                phone: m.phone || '',
-                status: m.status || 'Aktif',
-                duesStatus: m.dues_status === 'LUNAS' ? 'LUNAS' : 'BELUM BAYAR',
-                paidAt: m.paid_at || '-',
-                duesAmount: Number(m.dues_amount || 50000),
-              }));
-            }
+            grouped[a] = list.map((m: any) => ({
+              id: m.id,
+              angkatan: m.angkatan,
+              memberCode: m.member_code,
+              fullName: m.full_name,
+              section: m.section,
+              instrument: m.instrument || '-',
+              phone: m.phone || '',
+              status: m.status || 'Aktif',
+              duesStatus: m.dues_status === 'LUNAS' ? 'LUNAS' : 'BELUM BAYAR',
+              paidAt: m.paid_at || '-',
+              duesAmount: Number(m.dues_amount || 50000),
+            }));
           });
           setMembersByAngkatan(grouped);
+          localStorage.setItem('kgt_real_members_v2', JSON.stringify(grouped));
         }
 
-        const { data: dbTx } = await (supabase as any).from('kgt_transactions').select('*').order('created_at', { ascending: false });
-        if (dbTx && dbTx.length > 0) {
-          const groupedTx: Record<AngkatanId, TransactionItem[]> = { ...INITIAL_TRANSACTIONS_BY_ANGKATAN };
+        const { data: dbTx } = await (supabase as any)
+          .from('kgt_transactions')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (dbTx) {
+          const groupedTx: Record<AngkatanId, TransactionItem[]> = {
+            '16': [],
+            '17': [],
+            '18': [],
+            '19': [],
+            '20': [],
+            '21': [],
+          };
           ANGKATAN_LIST.forEach((a) => {
             const list = dbTx.filter((t: any) => t.angkatan === a);
-            if (list.length > 0) {
-              groupedTx[a] = list.map((t: any) => ({
-                id: t.id,
-                angkatan: t.angkatan,
-                referenceNo: t.reference_no,
-                type: t.type,
-                category: t.category,
-                description: t.description,
-                vendor: t.vendor || '-',
-                amount: Number(t.amount),
-                paymentMethod: t.payment_method || 'Tunai Kas',
-                recordedBy: t.recorded_by || 'Bendahara',
-                transactionDate: t.transaction_date,
-              }));
-            }
+            groupedTx[a] = list.map((t: any) => ({
+              id: t.id,
+              angkatan: t.angkatan,
+              referenceNo: t.reference_no,
+              type: t.type,
+              category: t.category,
+              description: t.description,
+              vendor: t.vendor || '-',
+              amount: Number(t.amount),
+              paymentMethod: t.payment_method || 'Tunai Kas',
+              recordedBy: t.recorded_by || 'Admin',
+              transactionDate: t.transaction_date,
+            }));
           });
           setTxByAngkatan(groupedTx);
+          localStorage.setItem('kgt_real_tx_v2', JSON.stringify(groupedTx));
         }
       } catch {
-        // Fallback to localStorage if Supabase tables not yet created
+        // Fallback to localStorage
       }
     };
 
     fetchSupabaseData();
   }, []);
 
+  const setDuesNominal = (val: number) => {
+    setDuesNominalState(val);
+    try {
+      localStorage.setItem('kgt_dues_nominal_v2', String(val));
+    } catch {
+      // ignore
+    }
+  };
+
   const setActiveAngkatan = (a: AngkatanId) => {
-    // Jika admin_angkatan, kunci hanya di angkatannya sendiri
     if (role === 'admin_angkatan' && lockedAngkatan && a !== lockedAngkatan) {
       return;
     }
@@ -325,15 +332,15 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
   };
 
   const enterStudentMode = (angkatan: AngkatanId) => {
-    const disp = `Siswa Angkatan ${angkatan} (Hanya Membaca)`;
+    const disp = `Cek Kas Siswa — Angkatan ${angkatan}`;
     setRole('siswa');
-    setUsername(`Siswa MB${angkatan}`);
+    setUsername(`Angkatan ${angkatan}`);
     setDisplayName(disp);
     setLockedAngkatan(angkatan);
     setActiveAngkatanState(angkatan);
 
     document.cookie = `kgt_session_role=siswa; path=/; max-age=2592000; SameSite=Lax`;
-    document.cookie = `kgt_session_user=${encodeURIComponent(`Siswa MB${angkatan}`)}; path=/; max-age=2592000; SameSite=Lax`;
+    document.cookie = `kgt_session_user=${encodeURIComponent(`Angkatan ${angkatan}`)}; path=/; max-age=2592000; SameSite=Lax`;
     document.cookie = `kgt_session_display=${encodeURIComponent(disp)}; path=/; max-age=2592000; SameSite=Lax`;
     document.cookie = `kgt_session_locked_angkatan=${angkatan}; path=/; max-age=2592000; SameSite=Lax`;
     document.cookie = `kgt_active_angkatan=${angkatan}; path=/; max-age=2592000; SameSite=Lax`;
@@ -370,9 +377,14 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     if (!canEdit) return;
     const prefix = tx.type === 'pemasukan' ? 'BKM' : 'BKK';
     const seq = String((txByAngkatan[activeAngkatan]?.length || 0) + 1).padStart(3, '0');
+    const newId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${prefix}-${activeAngkatan}-${Date.now()}`;
+
     const newTx: TransactionItem = {
       ...tx,
-      id: `${prefix}-${activeAngkatan}-${Date.now()}`,
+      id: newId,
       angkatan: activeAngkatan,
       referenceNo: `${prefix}-${activeAngkatan}-${seq}`,
       recordedBy: username,
@@ -383,11 +395,12 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       [activeAngkatan]: [newTx, ...(txByAngkatan[activeAngkatan] || [])],
     };
     setTxByAngkatan(updated);
-    localStorage.setItem('kgt_tx_multi_v1', JSON.stringify(updated));
+    localStorage.setItem('kgt_real_tx_v2', JSON.stringify(updated));
 
     try {
       const supabase = createClient();
       await (supabase as any).from('kgt_transactions').insert({
+        id: newId,
         angkatan: activeAngkatan,
         reference_no: newTx.referenceNo,
         type: newTx.type,
@@ -411,7 +424,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       [activeAngkatan]: (txByAngkatan[activeAngkatan] || []).filter((t) => t.id !== id),
     };
     setTxByAngkatan(updated);
-    localStorage.setItem('kgt_tx_multi_v1', JSON.stringify(updated));
+    localStorage.setItem('kgt_real_tx_v2', JSON.stringify(updated));
 
     try {
       const supabase = createClient();
@@ -423,9 +436,14 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
 
   const addMember = async (m: Omit<MemberItem, 'id' | 'angkatan'>) => {
     if (!canEdit) return;
+    const newId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `m${activeAngkatan}-${Date.now()}`;
+
     const newMember: MemberItem = {
       ...m,
-      id: `m${activeAngkatan}-${Date.now()}`,
+      id: newId,
       angkatan: activeAngkatan,
     };
     const updated = {
@@ -433,11 +451,12 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       [activeAngkatan]: [...(membersByAngkatan[activeAngkatan] || []), newMember],
     };
     setMembersByAngkatan(updated);
-    localStorage.setItem('kgt_members_multi_v1', JSON.stringify(updated));
+    localStorage.setItem('kgt_real_members_v2', JSON.stringify(updated));
 
     try {
       const supabase = createClient();
       await (supabase as any).from('kgt_members').insert({
+        id: newId,
         angkatan: activeAngkatan,
         member_code: newMember.memberCode,
         full_name: newMember.fullName,
@@ -454,7 +473,24 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const toggleMemberDues = async (id: string) => {
+  const deleteMember = async (id: string) => {
+    if (!canEdit) return;
+    const updated = {
+      ...membersByAngkatan,
+      [activeAngkatan]: (membersByAngkatan[activeAngkatan] || []).filter((m) => m.id !== id),
+    };
+    setMembersByAngkatan(updated);
+    localStorage.setItem('kgt_real_members_v2', JSON.stringify(updated));
+
+    try {
+      const supabase = createClient();
+      await (supabase as any).from('kgt_members').delete().eq('id', id);
+    } catch {
+      // Deleted from localStorage
+    }
+  };
+
+  const toggleMemberDues = async (id: string, recordToCash = false) => {
     if (!canEdit) return;
     const list = membersByAngkatan[activeAngkatan] || [];
     const target = list.find((item) => item.id === id);
@@ -464,7 +500,11 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       target.duesStatus === 'LUNAS' ? 'BELUM BAYAR' : 'LUNAS';
     const nextPaidAt =
       nextStatus === 'LUNAS'
-        ? new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+        ? new Date().toLocaleDateString('id-ID', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          })
         : '-';
 
     const updatedList = list.map((item) =>
@@ -476,7 +516,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       [activeAngkatan]: updatedList,
     };
     setMembersByAngkatan(updated);
-    localStorage.setItem('kgt_members_multi_v1', JSON.stringify(updated));
+    localStorage.setItem('kgt_real_members_v2', JSON.stringify(updated));
 
     try {
       const supabase = createClient();
@@ -486,6 +526,18 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         .eq('id', id);
     } catch {
       // Updated in localStorage
+    }
+
+    if (recordToCash && nextStatus === 'LUNAS') {
+      await addTransaction({
+        type: 'pemasukan',
+        category: 'Iuran Anggota',
+        description: `Pembayaran Iuran Kas - ${target.fullName} (${target.memberCode})`,
+        vendor: target.fullName,
+        amount: target.duesAmount || duesNominal,
+        paymentMethod: 'Tunai Kas',
+        transactionDate: new Date().toISOString().slice(0, 10),
+      });
     }
   };
 
@@ -498,6 +550,8 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         lockedAngkatan,
         activeAngkatan,
         canEdit,
+        duesNominal,
+        setDuesNominal,
         setActiveAngkatan,
         loginWithCredentials,
         enterStudentMode,
@@ -510,6 +564,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         addTransaction,
         deleteTransaction,
         addMember,
+        deleteMember,
         toggleMemberDues,
       }}
     >
