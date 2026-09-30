@@ -1,40 +1,31 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-  const isSupabaseConfigured =
-    supabaseUrl.startsWith('https://') &&
-    !supabaseUrl.includes('your-project.supabase.co') &&
-    supabaseAnonKey.length > 20 &&
-    supabaseAnonKey !== 'your-anon-key-here'
-
   let user = null
 
-  if (isSupabaseConfigured) {
-    try {
-      const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-            supabaseResponse = NextResponse.next({ request })
-            cookiesToSet.forEach(({ name, value, options }) =>
-              supabaseResponse.cookies.set(name, value, options)
-            )
-          },
+  try {
+    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
         },
-      })
-      const { data } = await supabase.auth.getUser()
-      user = data.user
-    } catch {
-      // Fallback to cookie session if network/Supabase fails
-    }
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
+    })
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch {
+    // Fallback to cookie session if network/Supabase fails
   }
 
   const demoRole = request.cookies.get('kgt_session_role')?.value

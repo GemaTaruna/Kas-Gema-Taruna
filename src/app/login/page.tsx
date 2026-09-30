@@ -18,18 +18,13 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const isSupabaseConfigured =
-      supabaseUrl.startsWith('https://') &&
-      !supabaseUrl.includes('your-project.supabase.co');
-
     const isDemoAccount = [
       'bendahara@gemataruna.id',
       'pembina@gemataruna.id',
       'anggota@gemataruna.id',
     ].includes(identifier.trim().toLowerCase());
 
-    if (isSupabaseConfigured && !isDemoAccount) {
+    if (!isDemoAccount) {
       const { error } = await supabase.auth.signInWithPassword({
         email: identifier,
         password: password,
