@@ -27,17 +27,19 @@ export default function PembayaranIuranPage() {
     monthlySessionCount,
     setMonthlySessionCount,
     sessions,
-    activeSessionId,
-    setActiveSessionId,
     toggleSessionDues,
     payMultipleSessionsDues,
+    clearMemberMonthDues,
+    markAllMembersSessionDues,
+    clearAllMembersSessionDues,
   } = useAngkatan();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<
-    'ALL' | 'LUNAS' | 'BELUM BAYAR' | 'TUNGGAKAN'
+    'ALL' | 'BELUM_PENUH' | 'LUNAS_PENUH' | 'TUNGGAKAN'
   >('ALL');
   const [sectionFilter, setSectionFilter] = useState<string>('ALL');
+  const [bulkTargetSession, setBulkTargetSession] = useState<string>('P1');
 
   const [selectedYear, selectedMonthNum] = (activeMonth || '2026-09').split('-');
 
@@ -54,15 +56,6 @@ export default function PembayaranIuranPage() {
     setActiveMonth(`${nextY}-${nextM}`);
   };
 
-  const activeSession =
-    sessions.find((s) => s.id === activeSessionId) ||
-    sessions[0] || {
-      id: 'P1',
-      fullKey: `${activeMonth}:P1`,
-      label: 'Pertemuan 1',
-      date: '',
-    };
-
   const filtered = members.filter((m) => {
     const matchSearch =
       m.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -70,27 +63,26 @@ export default function PembayaranIuranPage() {
       (m.kelas || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.instrument.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const isPaidCurrent = m.paidSessions.includes(activeSessionId);
+    const isFullPaid = m.paidSessions.length >= monthlySessionCount;
     const matchStatus =
       statusFilter === 'ALL' ||
-      (statusFilter === 'LUNAS' && isPaidCurrent) ||
-      (statusFilter === 'BELUM BAYAR' && !isPaidCurrent) ||
+      (statusFilter === 'LUNAS_PENUH' && isFullPaid) ||
+      (statusFilter === 'BELUM_PENUH' && !isFullPaid) ||
       (statusFilter === 'TUNGGAKAN' && (m.arrears?.length || 0) > 0);
 
     const matchSection = sectionFilter === 'ALL' || m.section === sectionFilter;
     return matchSearch && matchStatus && matchSection;
   });
 
-  // Statistik pada Pertemuan Aktif di Bulan Ini
-  const paidOnActiveSession = members.filter((m) =>
-    m.paidSessions.includes(activeSessionId)
+  // Statistik Bulan Aktif
+  const fullPaidCount = members.filter(
+    (m) => m.paidSessions.length >= monthlySessionCount
   ).length;
-  const unpaidOnActiveSession = members.length - paidOnActiveSession;
+  const notFullPaidCount = members.length - fullPaidCount;
   const membersWithArrearsCount = members.filter(
     (m) => (m.arrears?.length || 0) > 0
   ).length;
 
-  // Total seluruh pembayaran pada Bulan Aktif
   const totalPaidOccurrencesInMonth = members.reduce(
     (acc, m) => acc + (m.paidSessions?.length || 0),
     0
@@ -102,15 +94,19 @@ export default function PembayaranIuranPage() {
   const todayRecapTx = transactions.find((t) => t.referenceNo === todayRecapRefNo);
 
   const buildWaUrlForMember = (m: (typeof members)[number]) => {
-    const isPaidActive = m.paidSessions.includes(activeSessionId);
+    const unpaidCurrentSessions = sessions
+      .filter((s) => !m.paidSessions.includes(s.id))
+      .map((s) => s.id);
     const arrearsList = m.arrears || [];
 
     const parts: string[] = [];
     let countUnpaid = 0;
 
-    if (!isPaidActive) {
-      parts.push(`${activeSession.id} (${formatMonthLabel(activeMonth)})`);
-      countUnpaid += 1;
+    if (unpaidCurrentSessions.length > 0) {
+      parts.push(
+        `${unpaidCurrentSessions.join(', ')} (${formatMonthLabel(activeMonth)})`
+      );
+      countUnpaid += unpaidCurrentSessions.length;
     }
     if (arrearsList.length > 0) {
       const arrearLabels = arrearsList.map((a) => a.shortLabel).join(', ');
@@ -119,7 +115,7 @@ export default function PembayaranIuranPage() {
     }
 
     if (parts.length === 0) {
-      parts.push(`${activeSession.id} (${formatMonthLabel(activeMonth)})`);
+      parts.push(`Iuran ${formatMonthLabel(activeMonth)}`);
       countUnpaid = 1;
     }
 
@@ -131,6 +127,40 @@ export default function PembayaranIuranPage() {
       pertemuan: parts.join(' + '),
       nominal: formatRupiah(countUnpaid * duesNominal),
     });
+  };
+
+  const handleBulkCheckAll = async () => {
+    const targetIds = filtered.map((m) => m.id);
+    if (targetIds.length === 0) return;
+    const label =
+      bulkTargetSession === 'ALL'
+        ? `SELURUH Pertemuan (P1–P${monthlySessionCount})`
+        : `Pertemuan ${bulkTargetSession}`;
+    if (
+      !window.confirm(
+        `Tandai LUNAS ${label} untuk ${targetIds.length} siswa yang tampil saat ini pada tanggal terima ${activePaymentDate}?`
+      )
+    ) {
+      return;
+    }
+    await markAllMembersSessionDues(bulkTargetSession, targetIds);
+  };
+
+  const handleBulkClearAll = async () => {
+    const targetIds = filtered.map((m) => m.id);
+    if (targetIds.length === 0) return;
+    const label =
+      bulkTargetSession === 'ALL'
+        ? `SELURUH Pertemuan (P1–P${monthlySessionCount})`
+        : `Pertemuan ${bulkTargetSession}`;
+    if (
+      !window.confirm(
+        `Hapus / Batalkan status lunas ${label} untuk ${targetIds.length} siswa yang tampil saat ini? (Rekap di Pemasukan Kas juga akan otomatis dikurangi/dihapus).`
+      )
+    ) {
+      return;
+    }
+    await clearAllMembersSessionDues(bulkTargetSession, targetIds);
   };
 
   return (
@@ -145,7 +175,8 @@ export default function PembayaranIuranPage() {
             Pembayaran Iuran — Angkatan {activeAngkatan} (MB{activeAngkatan})
           </h1>
           <p className="text-xs sm:text-sm text-on-surface-variant">
-            Seluruh siswa yang membayar pada hari yang sama otomatis digabung menjadi{' '}
+            Klik langsung kotak <strong>P1–P{monthlySessionCount}</strong> pada nama siswa, atau gunakan tombol{' '}
+            <strong>Ceklis Semua / Hapus Semua</strong>. Seluruh pembayaran di tanggal yang sama otomatis menjadi{' '}
             <strong className="text-on-surface">1 baris Rekap Total</strong> di Pemasukan Kas.
           </p>
         </div>
@@ -153,7 +184,7 @@ export default function PembayaranIuranPage() {
 
       {/* BARIS KONTROL UTAMA: 1. Pilih Bulan, 2. Jumlah Latihan Bulan Ini, 3. Tanggal Setor Rekap BKM */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* 1. Pemilih Bulan (Opsi A - Tab Bulanan) */}
+        {/* 1. Pemilih Bulan */}
         <div className="lg:col-span-4 bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/40 shadow-xs flex flex-col justify-between gap-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
@@ -292,89 +323,29 @@ export default function PembayaranIuranPage() {
         </div>
       </div>
 
-      {/* Bar Pilih Pertemuan Aktif (P1 - PN) */}
-      <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 border border-slate-800 shadow-md">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-          <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 block">
-              PILIH PERTEMUAN LATIHAN — {formatMonthLabel(activeMonth).toUpperCase()}
-            </span>
-            <p className="text-xs text-slate-300">
-              Klik pertemuan yang sedang berlangsung, atau klik langsung kotak{' '}
-              <strong className="text-white">P1–P{monthlySessionCount}</strong> &amp;{' '}
-              <strong className="text-amber-300">Tunggakan Bulan Lalu</strong> pada baris siswa.
-            </p>
-          </div>
-          <div className="text-xs font-bold text-amber-300 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700 shrink-0">
-            Sedang Dibuka: {activeSession.id} ({paidOnActiveSession}/{members.length} Lunas)
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {sessions.map((s) => {
-            const isSelected = s.id === activeSessionId;
-            const paidCount = members.filter((m) =>
-              m.paidSessions.includes(s.id)
-            ).length;
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setActiveSessionId(s.id)}
-                className={`px-3.5 py-2 rounded-xl text-left transition shrink-0 cursor-pointer border ${
-                  isSelected
-                    ? 'bg-amber-400 text-slate-950 border-amber-300 font-extrabold shadow'
-                    : 'bg-slate-800/90 text-slate-200 border-slate-700 hover:bg-slate-800'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-xs sm:text-sm font-extrabold">{s.id}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${
-                      isSelected
-                        ? 'bg-slate-950/20 text-slate-950'
-                        : 'bg-slate-700 text-slate-300'
-                    }`}
-                  >
-                    {paidCount}/{members.length}
-                  </span>
-                </div>
-                <p
-                  className={`text-[10px] mt-0.5 truncate max-w-[135px] ${
-                    isSelected ? 'text-slate-900 font-semibold' : 'text-slate-400'
-                  }`}
-                >
-                  {s.label}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* 4 Kartu Ringkasan */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/40">
           <span className="text-[11px] font-bold uppercase text-on-surface-variant block mb-1">
-            Lunas ({activeSession.id} {formatMonthLabel(activeMonth)})
+            Total Pembayaran ({formatMonthLabel(activeMonth)})
           </span>
           <p className="text-lg sm:text-2xl font-extrabold text-emerald-600">
-            {paidOnActiveSession} Siswa
+            {totalPaidOccurrencesInMonth}x Bayar
           </p>
           <span className="text-[11px] text-on-surface-variant">
-            {formatRupiah(paidOnActiveSession * duesNominal)}
+            Dari {members.length} siswa aktif
           </span>
         </div>
 
         <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/40">
           <span className="text-[11px] font-bold uppercase text-on-surface-variant block mb-1">
-            Belum Bayar ({activeSession.id})
+            Lunas Penuh (P1–P{monthlySessionCount})
           </span>
-          <p className="text-lg sm:text-2xl font-extrabold text-rose-600">
-            {unpaidOnActiveSession} Siswa
+          <p className="text-lg sm:text-2xl font-extrabold text-on-surface">
+            {fullPaidCount} / {members.length} Siswa
           </p>
           <span className="text-[11px] text-on-surface-variant">
-            Siap diingatkan via WA
+            {notFullPaidCount} siswa belum penuh
           </span>
         </div>
 
@@ -392,19 +363,20 @@ export default function PembayaranIuranPage() {
 
         <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/40">
           <span className="text-[11px] font-bold uppercase text-on-surface-variant block mb-1">
-            Total Iuran {formatMonthLabel(activeMonth)}
+            Total Kas Iuran {formatMonthLabel(activeMonth)}
           </span>
           <p className="text-lg sm:text-2xl font-extrabold text-secondary">
             {formatRupiah(totalKasIuranBulanIni)}
           </p>
           <span className="text-[11px] text-on-surface-variant">
-            {totalPaidOccurrencesInMonth}x pembayaran bulan ini
+            @{formatRupiah(duesNominal)} / pertemuan
           </span>
         </div>
       </div>
 
-      {/* Filter & Pencarian */}
+      {/* Filter, Aksi Massal (Ceklis Semua / Hapus Semua), & Tabel */}
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs overflow-hidden">
+        {/* Baris 1: Pencarian & Filter */}
         <div className="p-4 border-b border-outline-variant/40 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex flex-col sm:flex-row gap-2.5 w-full lg:w-auto">
             <input
@@ -430,14 +402,14 @@ export default function PembayaranIuranPage() {
 
           <div className="flex flex-wrap gap-1.5">
             {[
-              { id: 'ALL', label: `Semua (${members.length})` },
+              { id: 'ALL', label: `Semua Siswa (${members.length})` },
               {
-                id: 'BELUM BAYAR',
-                label: `Belum Lunas ${activeSession.id} (${unpaidOnActiveSession})`,
+                id: 'BELUM_PENUH',
+                label: `Belum Penuh (${notFullPaidCount})`,
               },
               {
-                id: 'LUNAS',
-                label: `Sudah Lunas ${activeSession.id} (${paidOnActiveSession})`,
+                id: 'LUNAS_PENUH',
+                label: `Lunas Penuh (${fullPaidCount})`,
               },
               {
                 id: 'TUNGGAKAN',
@@ -460,6 +432,53 @@ export default function PembayaranIuranPage() {
           </div>
         </div>
 
+        {/* Baris 2: Aksi Cepat Massal (Ceklis Semua / Hapus Semua) */}
+        {canEdit && members.length > 0 && (
+          <div className="px-4 py-3 bg-slate-50 border-b border-outline-variant/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="font-extrabold text-slate-800">
+                ⚡ Aksi Cepat Massal ({filtered.length} Siswa):
+              </span>
+              <select
+                value={bulkTargetSession}
+                onChange={(e) => setBulkTargetSession(e.target.value)}
+                className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-900 text-xs outline-none"
+              >
+                {sessions.map((s) => {
+                  const cnt = members.filter((m) =>
+                    m.paidSessions.includes(s.id)
+                  ).length;
+                  return (
+                    <option key={s.id} value={s.id}>
+                      Pertemuan {s.id} ({cnt}/{members.length} Lunas)
+                    </option>
+                  );
+                })}
+                <option value="ALL">
+                  Semua Pertemuan Bulan Ini (P1 s/d P{monthlySessionCount})
+                </option>
+              </select>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleBulkCheckAll}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-2xs transition cursor-pointer"
+              >
+                <span>✓ Ceklis Semua (Bayar Semua)</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkClearAll}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs transition cursor-pointer"
+              >
+                <span>✕ Hapus Semua Ceklis</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {filtered.length === 0 ? (
           <div className="p-10 text-center text-on-surface-variant">
             <span className="material-symbols-outlined text-4xl opacity-40 block mb-2">
@@ -480,29 +499,33 @@ export default function PembayaranIuranPage() {
               <table className="w-full text-left text-xs sm:text-sm">
                 <thead className="bg-surface-container-low text-on-surface-variant uppercase text-[11px] border-b border-outline-variant/40">
                   <tr>
-                    <th className="py-3 px-4">Anggota & Kelas</th>
+                    <th className="py-3 px-4">No</th>
+                    <th className="py-3 px-4">Anggota &amp; Kelas</th>
                     <th className="py-3 px-4">Seksi / Alat</th>
                     <th className="py-3 px-4">
                       Checklist {formatMonthLabel(activeMonth)} (P1–P{monthlySessionCount})
                     </th>
-                    <th className="py-3 px-4">Status {activeSession.id}</th>
-                    <th className="py-3 px-4 text-right">Aksi & Pengingat WA</th>
+                    <th className="py-3 px-4 text-right">Aksi Cepat &amp; WA</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/20">
-                  {filtered.map((m) => {
-                    const isPaidActive = m.paidSessions.includes(activeSessionId);
+                  {filtered.map((m, idx) => {
+                    const paidCount = m.paidSessions.length;
+                    const isFullPaid = paidCount >= monthlySessionCount;
                     const arrearsList = m.arrears || [];
                     const waUrl = buildWaUrlForMember(m);
 
                     return (
                       <tr key={m.id} className="hover:bg-surface-container-low/50">
+                        <td className="py-3 px-4 font-mono text-on-surface-variant">
+                          {idx + 1}
+                        </td>
                         <td className="py-3 px-4">
                           <span className="font-bold text-on-surface block">
                             {m.fullName}
                           </span>
                           <span className="text-xs text-on-surface-variant">
-                            Kelas: <strong>{m.kelas || '-'}</strong> • {m.memberCode}
+                            Kelas: <strong>{m.kelas || '-'}</strong>
                           </span>
                         </td>
                         <td className="py-3 px-4">
@@ -528,14 +551,10 @@ export default function PembayaranIuranPage() {
                                       ? 'Sudah Lunas (Klik untuk Batalkan)'
                                       : 'Belum Bayar (Klik untuk Lunas)'
                                   }`}
-                                  className={`px-2 py-1 rounded-md text-[11px] font-extrabold border transition ${
+                                  className={`px-2.5 py-1 rounded-md text-[11px] font-extrabold border transition ${
                                     paid
                                       ? 'bg-emerald-600 text-white border-emerald-700'
                                       : 'bg-surface-container text-on-surface-variant border-outline-variant/50 hover:bg-surface-container-high'
-                                  } ${
-                                    s.id === activeSessionId
-                                      ? 'ring-2 ring-amber-400'
-                                      : ''
                                   } ${
                                     canEdit ? 'cursor-pointer' : 'cursor-default'
                                   }`}
@@ -546,11 +565,11 @@ export default function PembayaranIuranPage() {
                             })}
                           </div>
                           <span className="text-[11px] text-on-surface-variant mt-1 block">
-                            Bulan ini: {m.paidSessions.length}/{monthlySessionCount} pertemuan (
-                            {formatRupiah(m.paidSessions.length * duesNominal)})
+                            Terbayar: <strong>{paidCount}/{monthlySessionCount}</strong> pertemuan (
+                            {formatRupiah(paidCount * duesNominal)})
                           </span>
 
-                          {/* Tampilan Langsung Tunggakan Bulan Lalu (Bisa Diklik Langsung di Bulan Berjalan!) */}
+                          {/* Tampilan Langsung Tunggakan Bulan Lalu */}
                           {arrearsList.length > 0 && (
                             <div className="mt-2 p-2 rounded-xl bg-amber-50 border border-amber-300/80 flex flex-wrap items-center gap-1.5">
                               <span className="text-[11px] font-extrabold text-amber-900">
@@ -564,7 +583,6 @@ export default function PembayaranIuranPage() {
                                   disabled={!canEdit}
                                   onClick={() => toggleSessionDues(m.id, arr.fullKey)}
                                   className="px-2 py-0.5 rounded-md bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[10px] shadow-2xs cursor-pointer transition"
-                                  title={`Klik untuk melunasi tunggakan ${arr.monthLabel} (${arr.sessionId}) pada setoran hari ini (${activePaymentDate})`}
                                 >
                                   + Bayar {arr.shortLabel}
                                 </button>
@@ -586,47 +604,43 @@ export default function PembayaranIuranPage() {
                             </div>
                           )}
                         </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                              isPaidActive
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-rose-100 text-rose-800'
-                            }`}
-                          >
-                            {isPaidActive
-                              ? `● LUNAS (${activeSession.id})`
-                              : `● BELUM (${activeSession.id})`}
-                          </span>
-                        </td>
                         <td className="py-3 px-4 text-right">
-                          <div className="inline-flex items-center justify-end gap-2">
-                            {canEdit && (
+                          <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                            {canEdit && !isFullPaid && (
                               <button
                                 type="button"
                                 onClick={() =>
-                                  toggleSessionDues(m.id, activeSessionId)
+                                  payMultipleSessionsDues(
+                                    m.id,
+                                    sessions.map((s) => s.id)
+                                  )
                                 }
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                                  isPaidActive
-                                    ? 'bg-slate-200 text-slate-700 hover:bg-rose-100 hover:text-rose-800'
-                                    : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'
-                                }`}
+                                className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-2xs cursor-pointer"
+                                title="Ceklis lunas seluruh pertemuan bulan ini untuk siswa ini"
                               >
-                                {isPaidActive
-                                  ? 'Batalkan Lunas'
-                                  : `Tandai Lunas ${activeSession.id}`}
+                                ✓ Bayar Semua
                               </button>
                             )}
 
-                            {(!isPaidActive || arrearsList.length > 0) && (
+                            {canEdit && paidCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => clearMemberMonthDues(m.id)}
+                                className="px-2.5 py-1.5 rounded-xl bg-slate-200 hover:bg-rose-100 text-slate-700 hover:text-rose-800 font-bold text-[11px] cursor-pointer"
+                                title="Hapus semua ceklis bulan ini untuk siswa ini"
+                              >
+                                ✕ Reset
+                              </button>
+                            )}
+
+                            {(!isFullPaid || arrearsList.length > 0) && (
                               <a
                                 href={waUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold text-xs shadow-xs transition"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold text-[11px] shadow-2xs transition"
                               >
-                                <span className="material-symbols-outlined text-[15px]">
+                                <span className="material-symbols-outlined text-[14px]">
                                   chat
                                 </span>
                                 Ingatkan WA
@@ -643,18 +657,19 @@ export default function PembayaranIuranPage() {
 
             {/* MOBILE CARD LIST (Layar < md) — TANPA PERLU GESER LAYAR KE KANAN */}
             <div className="md:hidden divide-y divide-outline-variant/30">
-              {filtered.map((m) => {
-                const isPaidActive = m.paidSessions.includes(activeSessionId);
+              {filtered.map((m, idx) => {
+                const paidCount = m.paidSessions.length;
+                const isFullPaid = paidCount >= monthlySessionCount;
                 const arrearsList = m.arrears || [];
                 const waUrl = buildWaUrlForMember(m);
 
                 return (
                   <div key={m.id} className="p-4 flex flex-col gap-3">
-                    {/* Baris Atas: Nama, Kelas, Seksi, dan Badge Status */}
+                    {/* Baris Atas: Nama, Kelas, Seksi, dan Progress */}
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="font-extrabold text-sm text-on-surface">
-                          {m.fullName}
+                          {idx + 1}. {m.fullName}
                         </p>
                         <p className="text-xs text-on-surface-variant">
                           Kelas <strong>{m.kelas || '-'}</strong> • {m.section} (
@@ -663,23 +678,19 @@ export default function PembayaranIuranPage() {
                       </div>
                       <span
                         className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
-                          isPaidActive
+                          isFullPaid
                             ? 'bg-emerald-100 text-emerald-800'
+                            : paidCount > 0
+                            ? 'bg-amber-100 text-amber-900'
                             : 'bg-rose-100 text-rose-800'
                         }`}
                       >
-                        {isPaidActive
-                          ? `LUNAS ${activeSession.id}`
-                          : `BELUM ${activeSession.id}`}
+                        {paidCount}/{monthlySessionCount} Lunas
                       </span>
                     </div>
 
                     {/* Baris Tengah: Kotak Pertemuan P1 - PN Bulan Ini */}
                     <div>
-                      <span className="text-[11px] font-semibold text-on-surface-variant block mb-1.5">
-                        Checklist {formatMonthLabel(activeMonth)} (Ketuk kotak untuk
-                        Lunas / Batal):
-                      </span>
                       <div className="grid grid-cols-4 gap-1.5">
                         {sessions.map((s) => {
                           const paid = m.paidSessions.includes(s.id);
@@ -693,10 +704,6 @@ export default function PembayaranIuranPage() {
                                 paid
                                   ? 'bg-emerald-600 text-white border-emerald-700'
                                   : 'bg-surface-container text-on-surface-variant border-outline-variant/60'
-                              } ${
-                                s.id === activeSessionId
-                                  ? 'ring-2 ring-amber-400'
-                                  : ''
                               }`}
                             >
                               <span>{s.id}</span>
@@ -707,7 +714,7 @@ export default function PembayaranIuranPage() {
                       </div>
                     </div>
 
-                    {/* Kotak Tunggakan Bulan Lalu di Mobile (Langsung Klik Tanpa Pindah Bulan!) */}
+                    {/* Kotak Tunggakan Bulan Lalu di Mobile */}
                     {arrearsList.length > 0 && (
                       <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300 flex flex-col gap-1.5">
                         <div className="flex items-center justify-between">
@@ -746,35 +753,44 @@ export default function PembayaranIuranPage() {
                       </div>
                     )}
 
-                    {/* Baris Bawah: Tombol Lunas & Tombol Ingatkan WA berdampingan penuh */}
+                    {/* Baris Bawah: Tombol Bayar Semua, Reset, & Ingatkan WA */}
                     <div className="flex items-center gap-2 pt-1">
-                      {canEdit && (
+                      {canEdit && !isFullPaid && (
                         <button
                           type="button"
-                          onClick={() => toggleSessionDues(m.id, activeSessionId)}
-                          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-extrabold transition cursor-pointer ${
-                            isPaidActive
-                              ? 'bg-slate-200 text-slate-800 hover:bg-rose-100 hover:text-rose-800'
-                              : 'bg-emerald-600 text-white shadow-xs'
-                          }`}
+                          onClick={() =>
+                            payMultipleSessionsDues(
+                              m.id,
+                              sessions.map((s) => s.id)
+                            )
+                          }
+                          className="flex-1 py-2 px-2.5 rounded-xl bg-emerald-600 text-white font-extrabold text-xs shadow-xs cursor-pointer"
                         >
-                          {isPaidActive
-                            ? `Batalkan Lunas ${activeSession.id}`
-                            : `✓ Tandai Lunas ${activeSession.id}`}
+                          ✓ Bayar Semua
                         </button>
                       )}
 
-                      {(!isPaidActive || arrearsList.length > 0) && (
+                      {canEdit && paidCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => clearMemberMonthDues(m.id)}
+                          className="py-2 px-3 rounded-xl bg-slate-200 text-slate-800 font-extrabold text-xs cursor-pointer"
+                        >
+                          ✕ Reset
+                        </button>
+                      )}
+
+                      {(!isFullPaid || arrearsList.length > 0) && (
                         <a
                           href={waUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex-1 py-2.5 px-3 rounded-xl bg-[#25D366] text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-xs"
+                          className="flex-1 py-2 px-2.5 rounded-xl bg-[#25D366] text-white font-extrabold text-xs flex items-center justify-center gap-1 shadow-xs"
                         >
-                          <span className="material-symbols-outlined text-[16px]">
+                          <span className="material-symbols-outlined text-[15px]">
                             chat
                           </span>
-                          Ingatkan via WA
+                          Ingatkan WA
                         </a>
                       )}
                     </div>

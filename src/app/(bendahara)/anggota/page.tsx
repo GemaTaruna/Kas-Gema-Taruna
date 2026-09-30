@@ -17,6 +17,7 @@ export default function AnggotaPage() {
     addMember,
     importMembersBulk,
     deleteMember,
+    deleteAllMembers,
   } = useAngkatan();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -70,6 +71,18 @@ export default function AnggotaPage() {
     setKelas('');
     setPhone('');
     setIsModalOpen(false);
+  };
+
+  const handleDeleteAllMembers = async () => {
+    if (members.length === 0) return;
+    if (
+      !window.confirm(
+        `Apakah Anda yakin ingin MENGHAPUS SEMUA (${members.length} siswa) pada Angkatan ${activeAngkatan} (MB${activeAngkatan})?`
+      )
+    ) {
+      return;
+    }
+    await deleteAllMembers();
   };
 
   // Download Template Excel (No, Nama, Kelas, Seksi, Alat, No WA)
@@ -207,6 +220,19 @@ export default function AnggotaPage() {
               </span>
               <span>+ Tambah Siswa</span>
             </button>
+
+            {members.length > 0 && (
+              <button
+                type="button"
+                onClick={handleDeleteAllMembers}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[17px]">
+                  delete_sweep
+                </span>
+                <span>Hapus Semua ({members.length})</span>
+              </button>
+            )}
           </div>
         )}
       </div>
