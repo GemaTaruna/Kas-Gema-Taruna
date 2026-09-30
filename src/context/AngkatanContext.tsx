@@ -18,20 +18,80 @@ export const SECTION_NAMES = Object.keys(SECTION_OPTIONS);
 
 export interface SessionInfo {
   id: string; // e.g. 'P1', 'P2', ...
+  fullKey: string; // e.g. '2026-10:P1'
   label: string; // e.g. 'Pertemuan 1'
   date: string;
 }
 
-export const DEFAULT_SESSIONS: SessionInfo[] = [
-  { id: 'P1', label: 'Pertemuan 1 (Minggu 1 - Sesi 1)', date: '' },
-  { id: 'P2', label: 'Pertemuan 2 (Minggu 1 - Sesi 2)', date: '' },
-  { id: 'P3', label: 'Pertemuan 3 (Minggu 2 - Sesi 1)', date: '' },
-  { id: 'P4', label: 'Pertemuan 4 (Minggu 2 - Sesi 2)', date: '' },
-  { id: 'P5', label: 'Pertemuan 5 (Minggu 3 - Sesi 1)', date: '' },
-  { id: 'P6', label: 'Pertemuan 6 (Minggu 3 - Sesi 2)', date: '' },
-  { id: 'P7', label: 'Pertemuan 7 (Minggu 4 - Sesi 1)', date: '' },
-  { id: 'P8', label: 'Pertemuan 8 (Minggu 4 - Sesi 2)', date: '' },
+export interface ArrearItem {
+  fullKey: string; // e.g. '2026-09:P2'
+  monthKey: string; // e.g. '2026-09'
+  monthLabel: string; // e.g. 'September 2026'
+  monthShort: string; // e.g. 'Sep'
+  sessionId: string; // e.g. 'P2'
+  shortLabel: string; // e.g. 'Sep-P2'
+}
+
+export const INDONESIAN_MONTHS = [
+  { num: '01', name: 'Januari', short: 'Jan' },
+  { num: '02', name: 'Februari', short: 'Feb' },
+  { num: '03', name: 'Maret', short: 'Mar' },
+  { num: '04', name: 'April', short: 'Apr' },
+  { num: '05', name: 'Mei', short: 'Mei' },
+  { num: '06', name: 'Juni', short: 'Jun' },
+  { num: '07', name: 'Juli', short: 'Jul' },
+  { num: '08', name: 'Agustus', short: 'Agu' },
+  { num: '09', name: 'September', short: 'Sep' },
+  { num: '10', name: 'Oktober', short: 'Okt' },
+  { num: '11', name: 'November', short: 'Nov' },
+  { num: '12', name: 'Desember', short: 'Des' },
 ];
+
+export function formatMonthLabel(monthKey: string): string {
+  const [year, month] = (monthKey || '').split('-');
+  const m = INDONESIAN_MONTHS.find((item) => item.num === month);
+  if (!m) return monthKey;
+  return `${m.name} ${year}`;
+}
+
+export function formatMonthShort(monthKey: string): string {
+  const [year, month] = (monthKey || '').split('-');
+  const m = INDONESIAN_MONTHS.find((item) => item.num === month);
+  if (!m) return monthKey;
+  return `${m.short} ${year?.slice(2) || ''}`.trim();
+}
+
+export function buildSessionKey(monthKey: string, sessionId: string): string {
+  if (sessionId.includes(':')) return sessionId;
+  return `${monthKey}:${sessionId}`;
+}
+
+export function parseSessionKey(
+  fullKey: string,
+  fallbackMonth: string
+): { monthKey: string; sessionId: string } {
+  if (fullKey.includes(':')) {
+    const [monthKey, sessionId] = fullKey.split(':');
+    return { monthKey, sessionId };
+  }
+  return { monthKey: fallbackMonth, sessionId: fullKey };
+}
+
+export function generateSessionsForMonth(monthKey: string, count: number): SessionInfo[] {
+  const safeCount = Math.max(1, Math.min(24, count || 8));
+  return Array.from({ length: safeCount }, (_, idx) => {
+    const num = idx + 1;
+    const id = `P${num}`;
+    const week = Math.ceil(num / 2);
+    const sesi = num % 2 === 1 ? 1 : 2;
+    return {
+      id,
+      fullKey: `${monthKey}:${id}`,
+      label: `Pertemuan ${num} (Minggu ${week} - Latihan ${sesi})`,
+      date: '',
+    };
+  });
+}
 
 export interface AccountInfo {
   username: string;
@@ -53,7 +113,10 @@ export interface MemberItem {
   status: string;
   duesStatus: 'LUNAS' | 'BELUM BAYAR';
   paidAt: string;
-  paidSessions: string[]; // Daftar ID pertemuan yang sudah lunas, misal ['P1', 'P2']
+  paidSessions: string[]; // Pertemuan lunas di bulan aktif, misal ['P1', 'P2']
+  allPaidKeys: string[]; // Seluruh key lintas bulan, misal ['2026-09:P1', '2026-10:P1']
+  paidSessionDates: Record<string, string>; // Map '2026-10:P1' -> '2026-10-06'
+  arrears: ArrearItem[]; // Daftar tunggakan dari bulan-bulan sebelumnya
   duesAmount: number;
 }
 
@@ -143,13 +206,13 @@ const EMPTY_TRANSACTIONS_BY_ANGKATAN: Record<AngkatanId, TransactionItem[]> = {
   '21': [],
 };
 
-const DEFAULT_SESSIONS_BY_ANGKATAN: Record<AngkatanId, SessionInfo[]> = {
-  '16': DEFAULT_SESSIONS,
-  '17': DEFAULT_SESSIONS,
-  '18': DEFAULT_SESSIONS,
-  '19': DEFAULT_SESSIONS,
-  '20': DEFAULT_SESSIONS,
-  '21': DEFAULT_SESSIONS,
+const EMPTY_MONTH_COUNTS_BY_ANGKATAN: Record<AngkatanId, Record<string, number>> = {
+  '16': {},
+  '17': {},
+  '18': {},
+  '19': {},
+  '20': {},
+  '21': {},
 };
 
 export const DEFAULT_WA_TEMPLATE =
@@ -198,20 +261,56 @@ function decodeStatusField(raw: string): { kelas: string; status: string } {
   return { kelas: '-', status: raw };
 }
 
-function encodePaidSessions(sessions: string[]): string {
-  return JSON.stringify(sessions || []);
+function encodePaidData(
+  allPaidKeys: string[],
+  paidSessionDates: Record<string, string>
+): string {
+  return JSON.stringify({
+    s: allPaidKeys || [],
+    d: paidSessionDates || {},
+  });
 }
 
-function decodePaidSessions(raw: string | null | undefined): string[] {
-  if (!raw || raw === '-') return [];
+function decodePaidData(
+  raw: string | null | undefined,
+  fallbackMonth: string
+): {
+  allPaidKeys: string[];
+  paidSessionDates: Record<string, string>;
+} {
+  if (!raw || raw === '-') {
+    return { allPaidKeys: [], paidSessionDates: {} };
+  }
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed)) {
+      const normalized = parsed.map((k: string) =>
+        k.includes(':') ? k : `${fallbackMonth}:${k}`
+      );
+      return { allPaidKeys: normalized, paidSessionDates: {} };
+    }
+    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.s)) {
+      const normalized = parsed.s.map((k: string) =>
+        k.includes(':') ? k : `${fallbackMonth}:${k}`
+      );
+      const dates: Record<string, string> = {};
+      if (parsed.d && typeof parsed.d === 'object') {
+        Object.entries(parsed.d).forEach(([k, v]) => {
+          const normKey = k.includes(':') ? k : `${fallbackMonth}:${k}`;
+          if (typeof v === 'string') dates[normKey] = v;
+        });
+      }
+      return { allPaidKeys: normalized, paidSessionDates: dates };
+    }
   } catch {
-    // fallback comma separated
-    if (raw.startsWith('P')) return raw.split(',').map((s) => s.trim());
+    if (raw.startsWith('P')) {
+      const normalized = raw
+        .split(',')
+        .map((s) => `${fallbackMonth}:${s.trim()}`);
+      return { allPaidKeys: normalized, paidSessionDates: {} };
+    }
   }
-  return [];
+  return { allPaidKeys: [], paidSessionDates: {} };
 }
 
 interface AngkatanContextValue {
@@ -225,10 +324,17 @@ interface AngkatanContextValue {
   setDuesNominal: (val: number) => void;
   waTemplate: string;
   setWaTemplate: (val: string) => void;
+  activeMonth: string; // 'YYYY-MM', e.g. '2026-10'
+  setActiveMonth: (monthKey: string) => void;
+  activePaymentDate: string; // 'YYYY-MM-DD', tanggal uang diterima bendahara
+  setActivePaymentDate: (dateStr: string) => void;
+  monthlySessionCount: number; // Jumlah latihan di bulan aktif (default 8)
+  setMonthlySessionCount: (count: number, targetMonth?: string) => Promise<void>;
   sessions: SessionInfo[];
-  activeSessionId: string;
+  activeSessionId: string; // 'P1', 'P2', ...
   setActiveSessionId: (id: string) => void;
-  addCustomSession: (label: string, date: string) => void;
+  addCustomSession: (label?: string, date?: string) => Promise<void>;
+  removeLastSession: () => Promise<void>;
   setActiveAngkatan: (a: AngkatanId) => void;
   loginWithCredentials: (
     usernameInput: string,
@@ -248,7 +354,17 @@ interface AngkatanContextValue {
   ) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   addMember: (
-    m: Omit<MemberItem, 'id' | 'angkatan' | 'paidSessions' | 'duesStatus' | 'paidAt'>
+    m: Omit<
+      MemberItem,
+      | 'id'
+      | 'angkatan'
+      | 'paidSessions'
+      | 'allPaidKeys'
+      | 'paidSessionDates'
+      | 'arrears'
+      | 'duesStatus'
+      | 'paidAt'
+    >
   ) => Promise<void>;
   importMembersBulk: (
     rows: Array<{
@@ -261,7 +377,16 @@ interface AngkatanContextValue {
     }>
   ) => Promise<number>;
   deleteMember: (id: string) => Promise<void>;
-  toggleSessionDues: (memberId: string, sessionId: string) => Promise<void>;
+  toggleSessionDues: (
+    memberId: string,
+    sessionIdOrFullKey: string,
+    customPaymentDate?: string
+  ) => Promise<void>;
+  payMultipleSessionsDues: (
+    memberId: string,
+    fullKeys: string[],
+    customPaymentDate?: string
+  ) => Promise<void>;
 }
 
 const AngkatanContext = createContext<AngkatanContextValue | null>(null);
@@ -273,16 +398,22 @@ function getCookieValue(name: string): string | null {
 }
 
 export function AngkatanProvider({ children }: { children: React.ReactNode }) {
+  const defaultToday = new Date().toISOString().slice(0, 10);
+  const defaultMonth = defaultToday.slice(0, 7);
+
   const [role, setRole] = useState<AppRole>('superadmin');
   const [username, setUsername] = useState<string>('Gema Taruna');
   const [displayName, setDisplayName] = useState<string>('Super Admin (Pembina)');
   const [lockedAngkatan, setLockedAngkatan] = useState<AngkatanId | null>(null);
   const [activeAngkatan, setActiveAngkatanState] = useState<AngkatanId>('16');
-  const [duesNominal, setDuesNominalState] = useState<number>(5000); // Rp 5.000 per pertemuan
+  const [duesNominal, setDuesNominalState] = useState<number>(5000);
   const [waTemplate, setWaTemplateState] = useState<string>(DEFAULT_WA_TEMPLATE);
-  const [sessionsByAngkatan, setSessionsByAngkatan] = useState<
-    Record<AngkatanId, SessionInfo[]>
-  >(DEFAULT_SESSIONS_BY_ANGKATAN);
+
+  const [activeMonth, setActiveMonthState] = useState<string>(defaultMonth);
+  const [activePaymentDate, setActivePaymentDateState] = useState<string>(defaultToday);
+  const [monthCountsByAngkatan, setMonthCountsByAngkatan] = useState<
+    Record<AngkatanId, Record<string, number>>
+  >(EMPTY_MONTH_COUNTS_BY_ANGKATAN);
   const [activeSessionId, setActiveSessionId] = useState<string>('P1');
 
   const [membersByAngkatan, setMembersByAngkatan] = useState<Record<AngkatanId, MemberItem[]>>(
@@ -308,25 +439,25 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const storedMembers = localStorage.getItem('kgt_real_members_v3');
+      const storedMembers = localStorage.getItem('kgt_real_members_v4');
       if (storedMembers) {
         setMembersByAngkatan(JSON.parse(storedMembers));
       }
-      const storedTx = localStorage.getItem('kgt_real_tx_v3');
+      const storedTx = localStorage.getItem('kgt_real_tx_v4');
       if (storedTx) {
         setTxByAngkatan(JSON.parse(storedTx));
       }
-      const storedNominal = localStorage.getItem('kgt_dues_nominal_v3');
+      const storedNominal = localStorage.getItem('kgt_dues_nominal_v4');
       if (storedNominal) {
         setDuesNominalState(Number(storedNominal) || 5000);
       }
-      const storedWa = localStorage.getItem('kgt_wa_template_v3');
+      const storedWa = localStorage.getItem('kgt_wa_template_v4');
       if (storedWa) {
         setWaTemplateState(storedWa);
       }
-      const storedSessions = localStorage.getItem('kgt_sessions_v3');
-      if (storedSessions) {
-        setSessionsByAngkatan(JSON.parse(storedSessions));
+      const storedMonthCounts = localStorage.getItem('kgt_month_counts_v4');
+      if (storedMonthCounts) {
+        setMonthCountsByAngkatan(JSON.parse(storedMonthCounts));
       }
     } catch {
       // ignore
@@ -349,11 +480,37 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
             '20': [],
             '21': [],
           };
+          const loadedCounts: Record<AngkatanId, Record<string, number>> = {
+            '16': {},
+            '17': {},
+            '18': {},
+            '19': {},
+            '20': {},
+            '21': {},
+          };
+
           ANGKATAN_LIST.forEach((a) => {
-            const list = dbMembers.filter((m: any) => m.angkatan === a);
+            const rawList = dbMembers.filter((m: any) => m.angkatan === a);
+            // Cek apakah ada row konfigurasi __CONFIG__
+            const configRow = rawList.find((m: any) => m.member_code === '__CONFIG__');
+            if (configRow && configRow.paid_at) {
+              try {
+                const parsedCfg = JSON.parse(configRow.paid_at);
+                if (parsedCfg && typeof parsedCfg.monthCounts === 'object') {
+                  loadedCounts[a] = parsedCfg.monthCounts;
+                }
+              } catch {
+                // ignore
+              }
+            }
+
+            const list = rawList.filter((m: any) => m.member_code !== '__CONFIG__');
             grouped[a] = list.map((m: any) => {
               const { kelas, status } = decodeStatusField(m.status);
-              const paidSessions = decodePaidSessions(m.paid_at);
+              const { allPaidKeys, paidSessionDates } = decodePaidData(
+                m.paid_at,
+                defaultMonth
+              );
               return {
                 id: m.id,
                 angkatan: m.angkatan,
@@ -364,15 +521,28 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
                 instrument: m.instrument || 'Terompet',
                 phone: m.phone || '',
                 status,
-                duesStatus: paidSessions.length > 0 ? 'LUNAS' : 'BELUM BAYAR',
-                paidAt: m.paid_at || '-',
-                paidSessions,
+                duesStatus: 'BELUM BAYAR',
+                paidAt: m.paid_at || '[]',
+                paidSessions: [],
+                allPaidKeys,
+                paidSessionDates,
+                arrears: [],
                 duesAmount: Number(m.dues_amount || 5000),
               };
             });
           });
+
           setMembersByAngkatan(grouped);
-          localStorage.setItem('kgt_real_members_v3', JSON.stringify(grouped));
+          localStorage.setItem('kgt_real_members_v4', JSON.stringify(grouped));
+
+          setMonthCountsByAngkatan((prev) => {
+            const merged: Record<AngkatanId, Record<string, number>> = { ...prev };
+            ANGKATAN_LIST.forEach((a) => {
+              merged[a] = { ...(prev[a] || {}), ...(loadedCounts[a] || {}) };
+            });
+            localStorage.setItem('kgt_month_counts_v4', JSON.stringify(merged));
+            return merged;
+          });
         }
 
         const { data: dbTx } = await (supabase as any)
@@ -406,7 +576,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
             }));
           });
           setTxByAngkatan(groupedTx);
-          localStorage.setItem('kgt_real_tx_v3', JSON.stringify(groupedTx));
+          localStorage.setItem('kgt_real_tx_v4', JSON.stringify(groupedTx));
         }
       } catch {
         // Fallback to localStorage
@@ -414,12 +584,12 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     };
 
     fetchSupabaseData();
-  }, []);
+  }, [defaultMonth]);
 
   const setDuesNominal = (val: number) => {
     setDuesNominalState(val);
     try {
-      localStorage.setItem('kgt_dues_nominal_v3', String(val));
+      localStorage.setItem('kgt_dues_nominal_v4', String(val));
     } catch {
       // ignore
     }
@@ -428,31 +598,107 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
   const setWaTemplate = (val: string) => {
     setWaTemplateState(val);
     try {
-      localStorage.setItem('kgt_wa_template_v3', val);
+      localStorage.setItem('kgt_wa_template_v4', val);
     } catch {
       // ignore
     }
   };
 
-  const addCustomSession = (label: string, date: string) => {
-    const currentList = sessionsByAngkatan[activeAngkatan] || DEFAULT_SESSIONS;
-    const nextNum = currentList.length + 1;
-    const newSession: SessionInfo = {
-      id: `P${nextNum}`,
-      label: label.trim() || `Pertemuan ${nextNum}`,
-      date,
+  const setActiveMonth = (monthKey: string) => {
+    setActiveMonthState(monthKey);
+    const countForMonth = monthCountsByAngkatan[activeAngkatan]?.[monthKey] || 8;
+    const currentNum = Number(activeSessionId.replace('P', '')) || 1;
+    if (currentNum > countForMonth) {
+      setActiveSessionId('P1');
+    }
+  };
+
+  const setActivePaymentDate = (dateStr: string) => {
+    if (!dateStr) return;
+    setActivePaymentDateState(dateStr);
+  };
+
+  // Simpan jumlah pertemuan per bulan ke localStorage & Supabase (__CONFIG__)
+  const setMonthlySessionCount = async (count: number, targetMonth?: string) => {
+    if (!canEdit) return;
+    const safeCount = Math.max(1, Math.min(24, count || 8));
+    const mKey = targetMonth || activeMonth;
+
+    const updatedForAngkatan = {
+      ...(monthCountsByAngkatan[activeAngkatan] || {}),
+      [mKey]: safeCount,
     };
-    const updated = {
-      ...sessionsByAngkatan,
-      [activeAngkatan]: [...currentList, newSession],
+    const updatedAll = {
+      ...monthCountsByAngkatan,
+      [activeAngkatan]: updatedForAngkatan,
     };
-    setSessionsByAngkatan(updated);
-    setActiveSessionId(newSession.id);
+
+    setMonthCountsByAngkatan(updatedAll);
     try {
-      localStorage.setItem('kgt_sessions_v3', JSON.stringify(updated));
+      localStorage.setItem('kgt_month_counts_v4', JSON.stringify(updatedAll));
     } catch {
       // ignore
     }
+
+    const currentNum = Number(activeSessionId.replace('P', '')) || 1;
+    if (currentNum > safeCount) {
+      setActiveSessionId(`P${safeCount}`);
+    }
+
+    try {
+      const supabase = createClient();
+      const configPayload = JSON.stringify({ monthCounts: updatedForAngkatan });
+      const { data: existingCfg } = await (supabase as any)
+        .from('kgt_members')
+        .select('id')
+        .eq('angkatan', activeAngkatan)
+        .eq('member_code', '__CONFIG__')
+        .maybeSingle();
+
+      if (existingCfg?.id) {
+        await (supabase as any)
+          .from('kgt_members')
+          .update({ paid_at: configPayload })
+          .eq('id', existingCfg.id);
+      } else {
+        const cfgId =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `cfg-${activeAngkatan}-${Date.now()}`;
+        await (supabase as any).from('kgt_members').insert({
+          id: cfgId,
+          angkatan: activeAngkatan,
+          member_code: '__CONFIG__',
+          full_name: 'CONFIG_ANGKATAN',
+          section: 'SYSTEM',
+          instrument: 'SYSTEM',
+          phone: '-',
+          status: 'SYSTEM',
+          dues_status: 'LUNAS',
+          paid_at: configPayload,
+          dues_amount: duesNominal,
+        });
+      }
+    } catch {
+      // Tersimpan di localStorage
+    }
+  };
+
+  const monthlySessionCount =
+    monthCountsByAngkatan[activeAngkatan]?.[activeMonth] || 8;
+
+  const currentSessions = generateSessionsForMonth(activeMonth, monthlySessionCount);
+
+  const addCustomSession = async () => {
+    const nextCount = monthlySessionCount + 1;
+    await setMonthlySessionCount(nextCount, activeMonth);
+    setActiveSessionId(`P${nextCount}`);
+  };
+
+  const removeLastSession = async () => {
+    if (monthlySessionCount <= 1) return;
+    const nextCount = monthlySessionCount - 1;
+    await setMonthlySessionCount(nextCount, activeMonth);
   };
 
   const setActiveAngkatan = (a: AngkatanId) => {
@@ -519,16 +765,65 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     role === 'superadmin' ||
     (role === 'admin_angkatan' && lockedAngkatan === activeAngkatan);
 
-  const currentSessions = sessionsByAngkatan[activeAngkatan] || DEFAULT_SESSIONS;
   const rawMembers = membersByAngkatan[activeAngkatan] || [];
 
-  // Status LUNAS/BELUM BAYAR dievaluasi berdasarkan pertemuan aktif (activeSessionId)
-  const currentMembers: MemberItem[] = rawMembers.map((m) => ({
-    ...m,
-    duesStatus: (m.paidSessions || []).includes(activeSessionId)
-      ? 'LUNAS'
-      : 'BELUM BAYAR',
-  }));
+  // Hitung pertemuan mana saja di bulan-bulan sebelum activeMonth yang sudah terlaksana (ada minimal 1 pembayar)
+  const heldPastSessionKeys = React.useMemo(() => {
+    const set = new Set<string>();
+    rawMembers.forEach((m) => {
+      (m.allPaidKeys || []).forEach((fullKey) => {
+        const { monthKey, sessionId } = parseSessionKey(fullKey, activeMonth);
+        if (monthKey < activeMonth) {
+          const maxCount = monthCountsByAngkatan[activeAngkatan]?.[monthKey] || 8;
+          const sNum = Number(sessionId.replace('P', '')) || 1;
+          if (sNum <= maxCount) {
+            set.add(`${monthKey}:${sessionId}`);
+          }
+        }
+      });
+    });
+    return Array.from(set).sort((a, b) => {
+      const pa = parseSessionKey(a, activeMonth);
+      const pb = parseSessionKey(b, activeMonth);
+      if (pa.monthKey !== pb.monthKey) return pa.monthKey.localeCompare(pb.monthKey);
+      const na = Number(pa.sessionId.replace('P', '')) || 0;
+      const nb = Number(pb.sessionId.replace('P', '')) || 0;
+      return na - nb;
+    });
+  }, [rawMembers, activeMonth, activeAngkatan, monthCountsByAngkatan]);
+
+  // Transformasi rawMembers untuk bulan aktif (activeMonth) beserta daftar tunggakan bulan lalu (arrears)
+  const currentMembers: MemberItem[] = rawMembers.map((m) => {
+    const allKeys = m.allPaidKeys || [];
+    const monthPrefix = `${activeMonth}:`;
+    const paidInActiveMonth = allKeys
+      .filter((k) => k.startsWith(monthPrefix))
+      .map((k) => k.slice(monthPrefix.length));
+
+    const memberArrears: ArrearItem[] = heldPastSessionKeys
+      .filter((pastKey) => !allKeys.includes(pastKey))
+      .map((pastKey) => {
+        const { monthKey, sessionId } = parseSessionKey(pastKey, activeMonth);
+        const mShort = formatMonthShort(monthKey);
+        return {
+          fullKey: pastKey,
+          monthKey,
+          monthLabel: formatMonthLabel(monthKey),
+          monthShort: mShort,
+          sessionId,
+          shortLabel: `${mShort}-${sessionId}`,
+        };
+      });
+
+    return {
+      ...m,
+      paidSessions: paidInActiveMonth,
+      arrears: memberArrears,
+      duesStatus: paidInActiveMonth.includes(activeSessionId)
+        ? 'LUNAS'
+        : 'BELUM BAYAR',
+    };
+  });
 
   const currentTransactions = txByAngkatan[activeAngkatan] || [];
 
@@ -576,7 +871,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         [activeAngkatan]: [newTx, ...(prev[activeAngkatan] || [])],
       };
-      localStorage.setItem('kgt_real_tx_v3', JSON.stringify(updated));
+      localStorage.setItem('kgt_real_tx_v4', JSON.stringify(updated));
       return updated;
     });
 
@@ -607,7 +902,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         [activeAngkatan]: (prev[activeAngkatan] || []).filter((t) => t.id !== id),
       };
-      localStorage.setItem('kgt_real_tx_v3', JSON.stringify(updated));
+      localStorage.setItem('kgt_real_tx_v4', JSON.stringify(updated));
       return updated;
     });
 
@@ -620,7 +915,17 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addMember = async (
-    m: Omit<MemberItem, 'id' | 'angkatan' | 'paidSessions' | 'duesStatus' | 'paidAt'>
+    m: Omit<
+      MemberItem,
+      | 'id'
+      | 'angkatan'
+      | 'paidSessions'
+      | 'allPaidKeys'
+      | 'paidSessionDates'
+      | 'arrears'
+      | 'duesStatus'
+      | 'paidAt'
+    >
   ) => {
     if (!canEdit) return;
     const newId =
@@ -628,13 +933,18 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         ? crypto.randomUUID()
         : `m${activeAngkatan}-${Date.now()}`;
 
+    const initialPaidAt = encodePaidData([], {});
+
     const newMember: MemberItem = {
       ...m,
       id: newId,
       angkatan: activeAngkatan,
       duesStatus: 'BELUM BAYAR',
-      paidAt: '[]',
+      paidAt: initialPaidAt,
       paidSessions: [],
+      allPaidKeys: [],
+      paidSessionDates: {},
+      arrears: [],
     };
 
     setMembersByAngkatan((prev) => {
@@ -642,7 +952,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         [activeAngkatan]: [...(prev[activeAngkatan] || []), newMember],
       };
-      localStorage.setItem('kgt_real_members_v3', JSON.stringify(updated));
+      localStorage.setItem('kgt_real_members_v4', JSON.stringify(updated));
       return updated;
     });
 
@@ -658,7 +968,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         phone: newMember.phone,
         status: encodeStatusField(newMember.kelas, newMember.status),
         dues_status: 'BELUM BAYAR',
-        paid_at: encodePaidSessions([]),
+        paid_at: initialPaidAt,
         dues_amount: newMember.duesAmount,
       });
     } catch {
@@ -679,6 +989,8 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     if (!canEdit || rows.length === 0) return 0;
 
     const existingCount = (membersByAngkatan[activeAngkatan] || []).length;
+    const initialPaidAt = encodePaidData([], {});
+
     const newItems: MemberItem[] = rows.map((r, idx) => {
       const seq = r.no?.trim() || String(existingCount + idx + 1).padStart(2, '0');
       const code = seq.toUpperCase().startsWith('MB')
@@ -706,8 +1018,11 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         phone: (r.phone || '').trim(),
         status: 'Aktif',
         duesStatus: 'BELUM BAYAR',
-        paidAt: '[]',
+        paidAt: initialPaidAt,
         paidSessions: [],
+        allPaidKeys: [],
+        paidSessionDates: {},
+        arrears: [],
         duesAmount: duesNominal,
       };
     });
@@ -717,7 +1032,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         [activeAngkatan]: [...(prev[activeAngkatan] || []), ...newItems],
       };
-      localStorage.setItem('kgt_real_members_v3', JSON.stringify(updated));
+      localStorage.setItem('kgt_real_members_v4', JSON.stringify(updated));
       return updated;
     });
 
@@ -733,7 +1048,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         phone: item.phone,
         status: encodeStatusField(item.kelas, item.status),
         dues_status: 'BELUM BAYAR',
-        paid_at: encodePaidSessions([]),
+        paid_at: initialPaidAt,
         dues_amount: item.duesAmount,
       }));
       await (supabase as any).from('kgt_members').insert(dbPayload);
@@ -751,53 +1066,219 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         [activeAngkatan]: (prev[activeAngkatan] || []).filter((m) => m.id !== id),
       };
-      localStorage.setItem('kgt_real_members_v3', JSON.stringify(updated));
+      localStorage.setItem('kgt_real_members_v4', JSON.stringify(updated));
       return updated;
     });
 
     try {
       const supabase = createClient();
+      await (supabase as any).from('kgt_transactions').delete().eq('id', id);
       await (supabase as any).from('kgt_members').delete().eq('id', id);
     } catch {
       // Deleted from localStorage
     }
   };
 
-  // Tandai Lunas / Batalkan Lunas untuk Pertemuan tertentu (Otomatis tambah/hapus di Pemasukan Kas!)
-  const toggleSessionDues = async (memberId: string, sessionId: string) => {
+  // Sinkronisasi 1 Baris Rekap Pemasukan Kas Harian untuk Tanggal Penerimaan (targetDate)
+  const syncDailyRecapTransaction = async (
+    angkatan: AngkatanId,
+    targetDate: string,
+    updatedMembersList: MemberItem[]
+  ) => {
+    const recapRefNo = `REKAP-MB${angkatan}-${targetDate}`;
+
+    // Hitung seluruh pembayaran dari anggota yang tanggal bayarnya == targetDate
+    let totalPaymentsCount = 0;
+    const uniqueStudents = new Set<string>();
+    const breakdownMap: Record<string, number> = {};
+
+    updatedMembersList.forEach((m) => {
+      const datesObj = m.paidSessionDates || {};
+      (m.allPaidKeys || []).forEach((fullKey) => {
+        const pDate = datesObj[fullKey];
+        if (pDate === targetDate) {
+          totalPaymentsCount += 1;
+          uniqueStudents.add(m.id);
+          const { monthKey, sessionId } = parseSessionKey(fullKey, activeMonth);
+          const label = `${sessionId} ${formatMonthShort(monthKey)}`;
+          breakdownMap[label] = (breakdownMap[label] || 0) + 1;
+        }
+      });
+    });
+
+    const totalRupiah = totalPaymentsCount * duesNominal;
+    const breakdownStr = Object.entries(breakdownMap)
+      .map(([lbl, cnt]) => `${cnt}x ${lbl}`)
+      .join(', ');
+
+    const existingList = txByAngkatan[angkatan] || [];
+    const existingRecap = existingList.find((t) => t.referenceNo === recapRefNo);
+
+    if (totalPaymentsCount === 0) {
+      // Jika 0 pembayaran pada tanggal tersebut (semua dibatalkan), hapus baris rekap dari BKM!
+      setTxByAngkatan((prev) => {
+        const updated = {
+          ...prev,
+          [angkatan]: (prev[angkatan] || []).filter(
+            (t) => t.referenceNo !== recapRefNo
+          ),
+        };
+        localStorage.setItem('kgt_real_tx_v4', JSON.stringify(updated));
+        return updated;
+      });
+
+      try {
+        const supabase = createClient();
+        await (supabase as any)
+          .from('kgt_transactions')
+          .delete()
+          .eq('angkatan', angkatan)
+          .eq('reference_no', recapRefNo);
+      } catch {
+        // Deleted locally
+      }
+      return;
+    }
+
+    const descriptionText = `Rekap Iuran Siswa (${totalPaymentsCount} pembayaran: ${breakdownStr})`;
+    const vendorText = `${uniqueStudents.size} Siswa MB${angkatan}`;
+
+    if (existingRecap) {
+      // Update baris rekap yang sudah ada untuk tanggal tersebut
+      const updatedTx: TransactionItem = {
+        ...existingRecap,
+        description: descriptionText,
+        vendor: vendorText,
+        amount: totalRupiah,
+        recordedBy: username,
+        transactionDate: targetDate,
+      };
+
+      setTxByAngkatan((prev) => {
+        const updated = {
+          ...prev,
+          [angkatan]: (prev[angkatan] || []).map((t) =>
+            t.referenceNo === recapRefNo ? updatedTx : t
+          ),
+        };
+        localStorage.setItem('kgt_real_tx_v4', JSON.stringify(updated));
+        return updated;
+      });
+
+      try {
+        const supabase = createClient();
+        await (supabase as any)
+          .from('kgt_transactions')
+          .update({
+            description: descriptionText,
+            vendor: vendorText,
+            amount: totalRupiah,
+            recorded_by: username,
+            transaction_date: targetDate,
+          })
+          .eq('id', existingRecap.id);
+      } catch {
+        // Updated locally
+      }
+    } else {
+      // Buat 1 baris rekap baru untuk tanggal tersebut
+      const newId =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `REKAP-${angkatan}-${Date.now()}`;
+
+      const newTx: TransactionItem = {
+        id: newId,
+        angkatan,
+        referenceNo: recapRefNo,
+        type: 'pemasukan',
+        category: 'Iuran Anggota',
+        description: descriptionText,
+        vendor: vendorText,
+        amount: totalRupiah,
+        paymentMethod: 'Tunai Kas',
+        recordedBy: username,
+        transactionDate: targetDate,
+      };
+
+      setTxByAngkatan((prev) => {
+        const updated = {
+          ...prev,
+          [angkatan]: [newTx, ...(prev[angkatan] || [])],
+        };
+        localStorage.setItem('kgt_real_tx_v4', JSON.stringify(updated));
+        return updated;
+      });
+
+      try {
+        const supabase = createClient();
+        await (supabase as any).from('kgt_transactions').insert({
+          id: newId,
+          angkatan,
+          reference_no: recapRefNo,
+          type: 'pemasukan',
+          category: 'Iuran Anggota',
+          description: descriptionText,
+          vendor: vendorText,
+          amount: totalRupiah,
+          payment_method: 'Tunai Kas',
+          recorded_by: username,
+          transaction_date: targetDate,
+        });
+      } catch {
+        // Inserted locally
+      }
+    }
+  };
+
+  // Tandai Lunas / Batalkan Lunas untuk Pertemuan tertentu (Otomatis masuk 1 baris Rekap Harian di Pemasukan Kas)
+  const toggleSessionDues = async (
+    memberId: string,
+    sessionIdOrFullKey: string,
+    customPaymentDate?: string
+  ) => {
     if (!canEdit) return;
     const list = membersByAngkatan[activeAngkatan] || [];
     const target = list.find((item) => item.id === memberId);
     if (!target) return;
 
-    const currentPaid = target.paidSessions || [];
-    const isCurrentlyPaid = currentPaid.includes(sessionId);
-    const nextPaid = isCurrentlyPaid
-      ? currentPaid.filter((s) => s !== sessionId)
-      : [...currentPaid, sessionId];
+    const fullKey = buildSessionKey(activeMonth, sessionIdOrFullKey);
+    const payDate = customPaymentDate || activePaymentDate;
 
-    const sessionObj = currentSessions.find((s) => s.id === sessionId);
-    const sessionLabel = sessionObj ? sessionObj.label : sessionId;
+    const currentAllKeys = target.allPaidKeys || [];
+    const currentDates = { ...(target.paidSessionDates || {}) };
+    const isCurrentlyPaid = currentAllKeys.includes(fullKey);
 
-    // Reference No unik untuk transaksi iuran siswa per pertemuan
-    const linkedRefNo = `IUR-${activeAngkatan}-${target.memberCode}-${sessionId}`;
+    let nextAllKeys: string[];
+    let dateToSync = payDate;
 
-    // Update state member
+    if (isCurrentlyPaid) {
+      // Batalkan Lunas: cek tanggal kapan iuran ini dulunya dicatat
+      dateToSync = currentDates[fullKey] || payDate;
+      nextAllKeys = currentAllKeys.filter((k) => k !== fullKey);
+      delete currentDates[fullKey];
+    } else {
+      // Tandai Lunas pada tanggal penerimaan aktif (payDate)
+      nextAllKeys = [...currentAllKeys, fullKey];
+      currentDates[fullKey] = payDate;
+    }
+
+    const encodedPaidAt = encodePaidData(nextAllKeys, currentDates);
+
+    const updatedMembersList = list.map((item) =>
+      item.id === memberId
+        ? {
+            ...item,
+            allPaidKeys: nextAllKeys,
+            paidSessionDates: currentDates,
+            paidAt: encodedPaidAt,
+          }
+        : item
+    );
+
     setMembersByAngkatan((prev) => {
-      const updatedList = (prev[activeAngkatan] || []).map((item) =>
-        item.id === memberId
-          ? {
-              ...item,
-              paidSessions: nextPaid,
-              paidAt: encodePaidSessions(nextPaid),
-              duesStatus: (nextPaid.includes(activeSessionId)
-                ? 'LUNAS'
-                : 'BELUM BAYAR') as 'LUNAS' | 'BELUM BAYAR',
-            }
-          : item
-      );
-      const updated = { ...prev, [activeAngkatan]: updatedList };
-      localStorage.setItem('kgt_real_members_v3', JSON.stringify(updated));
+      const updated = { ...prev, [activeAngkatan]: updatedMembersList };
+      localStorage.setItem('kgt_real_members_v4', JSON.stringify(updated));
       return updated;
     });
 
@@ -806,60 +1287,75 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       await (supabase as any)
         .from('kgt_members')
         .update({
-          dues_status: nextPaid.length > 0 ? 'LUNAS' : 'BELUM BAYAR',
-          paid_at: encodePaidSessions(nextPaid),
+          dues_status: nextAllKeys.length > 0 ? 'LUNAS' : 'BELUM BAYAR',
+          paid_at: encodedPaidAt,
         })
         .eq('id', memberId);
     } catch {
       // Updated in localStorage
     }
 
-    if (!isCurrentlyPaid) {
-      // Ditandai LUNAS -> Otomatis tambah ke Pemasukan Kas
-      await addTransaction({
-        customRefNo: linkedRefNo,
-        type: 'pemasukan',
-        category: 'Iuran Pertemuan',
-        description: `Iuran ${sessionLabel} - ${target.fullName} (${target.kelas})`,
-        vendor: target.fullName,
-        amount: duesNominal,
-        paymentMethod: 'Tunai Kas',
-        transactionDate: new Date().toISOString().slice(0, 10),
-      });
-    } else {
-      // Dibatalkan LUNAS -> Otomatis hapus dari Pemasukan Kas!
-      const matchingTx = (txByAngkatan[activeAngkatan] || []).find(
-        (t) => t.referenceNo === linkedRefNo
-      );
+    // Sinkronkan 1 baris Rekap Pemasukan Kas untuk tanggal tersebut
+    await syncDailyRecapTransaction(activeAngkatan, dateToSync, updatedMembersList);
+  };
 
-      setTxByAngkatan((prev) => {
-        const updated = {
-          ...prev,
-          [activeAngkatan]: (prev[activeAngkatan] || []).filter(
-            (t) => t.referenceNo !== linkedRefNo
-          ),
-        };
-        localStorage.setItem('kgt_real_tx_v3', JSON.stringify(updated));
-        return updated;
-      });
+  // Lunasi beberapa pertemuan/tunggakan sekaligus (misal tombol "Lunasi Semua Tunggakan")
+  const payMultipleSessionsDues = async (
+    memberId: string,
+    fullKeys: string[],
+    customPaymentDate?: string
+  ) => {
+    if (!canEdit || fullKeys.length === 0) return;
+    const list = membersByAngkatan[activeAngkatan] || [];
+    const target = list.find((item) => item.id === memberId);
+    if (!target) return;
 
-      try {
-        const supabase = createClient();
-        if (matchingTx) {
-          await (supabase as any)
-            .from('kgt_transactions')
-            .delete()
-            .eq('id', matchingTx.id);
-        } else {
-          await (supabase as any)
-            .from('kgt_transactions')
-            .delete()
-            .eq('reference_no', linkedRefNo);
-        }
-      } catch {
-        // Deleted from localStorage
+    const payDate = customPaymentDate || activePaymentDate;
+    const currentAllKeys = new Set(target.allPaidKeys || []);
+    const currentDates = { ...(target.paidSessionDates || {}) };
+
+    fullKeys.forEach((rawKey) => {
+      const fk = buildSessionKey(activeMonth, rawKey);
+      if (!currentAllKeys.has(fk)) {
+        currentAllKeys.add(fk);
+        currentDates[fk] = payDate;
       }
+    });
+
+    const nextAllKeys = Array.from(currentAllKeys);
+    const encodedPaidAt = encodePaidData(nextAllKeys, currentDates);
+
+    const updatedMembersList = list.map((item) =>
+      item.id === memberId
+        ? {
+            ...item,
+            allPaidKeys: nextAllKeys,
+            paidSessionDates: currentDates,
+            paidAt: encodedPaidAt,
+          }
+        : item
+    );
+
+    setMembersByAngkatan((prev) => {
+      const updated = { ...prev, [activeAngkatan]: updatedMembersList };
+      localStorage.setItem('kgt_real_members_v4', JSON.stringify(updated));
+      return updated;
+    });
+
+    try {
+      const supabase = createClient();
+      await (supabase as any)
+        .from('kgt_members')
+        .update({
+          dues_status: nextAllKeys.length > 0 ? 'LUNAS' : 'BELUM BAYAR',
+          paid_at: encodedPaidAt,
+        })
+        .eq('id', memberId);
+    } catch {
+      // Updated locally
     }
+
+    await syncDailyRecapTransaction(activeAngkatan, payDate, updatedMembersList);
   };
 
   return (
@@ -875,10 +1371,17 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         setDuesNominal,
         waTemplate,
         setWaTemplate,
+        activeMonth,
+        setActiveMonth,
+        activePaymentDate,
+        setActivePaymentDate,
+        monthlySessionCount,
+        setMonthlySessionCount,
         sessions: currentSessions,
         activeSessionId,
         setActiveSessionId,
         addCustomSession,
+        removeLastSession,
         setActiveAngkatan,
         loginWithCredentials,
         enterStudentMode,
@@ -894,6 +1397,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         importMembersBulk,
         deleteMember,
         toggleSessionDues,
+        payMultipleSessionsDues,
       }}
     >
       {children}

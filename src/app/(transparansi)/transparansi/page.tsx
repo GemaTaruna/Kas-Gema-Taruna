@@ -4,16 +4,23 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ANGKATAN_LIST,
+  formatMonthLabel,
+  INDONESIAN_MONTHS,
   SECTION_NAMES,
   useAngkatan,
 } from '@/context/AngkatanContext';
 import { formatRupiah } from '@/lib/utils';
+
+const YEAR_OPTIONS = ['2025', '2026', '2027', '2028'];
 
 export default function TransparansiSiswaPage() {
   const router = useRouter();
   const {
     activeAngkatan,
     setActiveAngkatan,
+    activeMonth,
+    setActiveMonth,
+    monthlySessionCount,
     members,
     transactions,
     sessions,
@@ -29,6 +36,12 @@ export default function TransparansiSiswaPage() {
   const [searchMember, setSearchMember] = useState('');
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [activeView, setActiveView] = useState<'semua' | 'iuran' | 'mutasi'>('semua');
+
+  const [selectedYear, selectedMonthNum] = (activeMonth || '2026-09').split('-');
+
+  const handleMonthChange = (newYear: string, newMonthNum: string) => {
+    setActiveMonth(`${newYear}-${newMonthNum}`);
+  };
 
   const lunasCount = members.filter((m) =>
     (m.paidSessions || []).includes(activeSessionId)
@@ -178,7 +191,7 @@ export default function TransparansiSiswaPage() {
               {formatRupiah(totalPemasukan)}
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              {transactions.filter((t) => t.type === 'pemasukan').length} transaksi
+              {transactions.filter((t) => t.type === 'pemasukan').length} bukti rekap/masuk
             </p>
           </div>
 
@@ -196,7 +209,7 @@ export default function TransparansiSiswaPage() {
 
           <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs">
             <span className="text-[11px] font-bold uppercase text-slate-500 block">
-              Lunas ({activeSessionId})
+              Lunas ({activeSessionId} - {formatMonthLabel(activeMonth)})
             </span>
             <p className="text-lg sm:text-2xl font-extrabold text-slate-900 mt-1">
               {lunasCount} / {members.length} Siswa
@@ -211,16 +224,40 @@ export default function TransparansiSiswaPage() {
         {(activeView === 'semua' || activeView === 'iuran') && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="p-4 border-b border-slate-200 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                 <div>
                   <h2 className="text-base sm:text-lg font-extrabold text-slate-900">
-                    Status Iuran Siswa per Pertemuan — Angkatan {activeAngkatan}
+                    Status Iuran Siswa — {formatMonthLabel(activeMonth)} ({monthlySessionCount}x Pertemuan)
                   </h2>
                   <p className="text-xs text-slate-500">
                     Kotak hijau menandakan pertemuan yang sudah lunas ({formatRupiah(duesNominal)} / pertemuan).
                   </p>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Pemilih Bulan & Tahun */}
+                  <select
+                    value={selectedMonthNum}
+                    onChange={(e) => handleMonthChange(selectedYear, e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm font-bold bg-slate-50 outline-none"
+                  >
+                    {INDONESIAN_MONTHS.map((m) => (
+                      <option key={m.num} value={m.num}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => handleMonthChange(e.target.value, selectedMonthNum)}
+                    className="px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm font-bold bg-slate-50 outline-none"
+                  >
+                    {YEAR_OPTIONS.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+
                   <input
                     type="text"
                     value={searchMember}
@@ -274,6 +311,7 @@ export default function TransparansiSiswaPage() {
                 <div className="md:hidden divide-y divide-slate-100">
                   {filteredMembers.map((m, idx) => {
                     const paidCount = (m.paidSessions || []).length;
+                    const arrearsList = m.arrears || [];
                     return (
                       <div key={m.id} className="p-3.5 space-y-2">
                         <div className="flex items-start justify-between gap-2">
@@ -294,7 +332,7 @@ export default function TransparansiSiswaPage() {
                             </p>
                           </div>
                           <span className="text-[11px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg shrink-0">
-                            {paidCount}x Lunas ({formatRupiah(paidCount * duesNominal)})
+                            {paidCount}/{monthlySessionCount} Lunas
                           </span>
                         </div>
 
@@ -315,6 +353,14 @@ export default function TransparansiSiswaPage() {
                             );
                           })}
                         </div>
+
+                        {arrearsList.length > 0 && (
+                          <div className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1">
+                            ⚠️ Tunggakan Bulan Lalu:{' '}
+                            {arrearsList.map((a) => a.shortLabel).join(', ')} (
+                            {formatRupiah(arrearsList.length * duesNominal)})
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -329,13 +375,16 @@ export default function TransparansiSiswaPage() {
                         <th className="py-3 px-4">Nama Siswa</th>
                         <th className="py-3 px-4">Kelas</th>
                         <th className="py-3 px-4">Seksi / Alat</th>
-                        <th className="py-3 px-4">Status Pertemuan</th>
+                        <th className="py-3 px-4">
+                          Status Pertemuan ({formatMonthLabel(activeMonth)})
+                        </th>
                         <th className="py-3 px-4 text-right">Total Terbayar</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {filteredMembers.map((m, idx) => {
                         const paidCount = (m.paidSessions || []).length;
+                        const arrearsList = m.arrears || [];
                         return (
                           <tr key={m.id} className="hover:bg-slate-50">
                             <td className="py-3 px-4 font-mono text-slate-500">
@@ -370,9 +419,16 @@ export default function TransparansiSiswaPage() {
                                   );
                                 })}
                               </div>
+                              {arrearsList.length > 0 && (
+                                <span className="inline-block mt-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-0.5">
+                                  ⚠️ Tunggakan Bulan Lalu:{' '}
+                                  {arrearsList.map((a) => a.shortLabel).join(', ')}
+                                </span>
+                              )}
                             </td>
                             <td className="py-3 px-4 text-right font-extrabold text-emerald-700">
-                              {formatRupiah(paidCount * duesNominal)} ({paidCount}x)
+                              {formatRupiah(paidCount * duesNominal)} ({paidCount}/
+                              {monthlySessionCount})
                             </td>
                           </tr>
                         );
@@ -413,11 +469,11 @@ export default function TransparansiSiswaPage() {
                         <span className="text-[10px] font-mono text-slate-500">
                           {t.transactionDate} • {t.referenceNo}
                         </span>
-                        <p className="text-xs font-bold text-slate-900 truncate">
+                        <p className="text-xs font-bold text-slate-900">
                           {t.description}
                         </p>
                         <span className="text-[10px] text-slate-500">
-                          {t.category}
+                          {t.category} • {t.vendor}
                         </span>
                       </div>
                       <span

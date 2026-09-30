@@ -59,17 +59,12 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold tracking-wider uppercase mb-3">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-              Sistem Keuangan Marching Band Terpadu
-            </div>
-
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white mb-2 leading-tight">
               KAS GEMA TARUNA
             </h1>
 
-            <p className="text-slate-400 text-xs sm:text-sm lg:text-base font-normal leading-relaxed mb-6">
-              Disiplin Irama, Transparansi Finansial, Prestasi Marching Arts Indonesia. Pembukuan kas terpisah secara mandiri untuk masing-masing angkatan.
+            <p className="text-amber-400 text-sm sm:text-base lg:text-lg font-bold tracking-wide mb-6">
+              Satu Tekad, Satu Semangat, Marching Hebat!
             </p>
 
             <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/70 rounded-2xl p-4 sm:p-5 shadow-inner mb-6">
