@@ -13,10 +13,55 @@ export default function RiwayatTransaksiPage() {
     totalPengeluaran,
     saldoAkhir,
     deleteTransaction,
+    updateTransaction,
   } = useAngkatan();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'pemasukan' | 'pengeluaran'>('ALL');
+
+  // State Edit Transaksi di Riwayat
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
+  const [editRefNo, setEditRefNo] = useState('');
+  const [editType, setEditType] = useState<'pemasukan' | 'pengeluaran'>('pemasukan');
+  const [editCategory, setEditCategory] = useState('Iuran Anggota');
+  const [editAmount, setEditAmount] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editVendor, setEditVendor] = useState('');
+  const [editPaymentMethod, setEditPaymentMethod] = useState('Tunai Kas');
+  const [editTransactionDate, setEditTransactionDate] = useState('');
+
+  const handleOpenEditModal = (t: (typeof transactions)[0]) => {
+    setEditingTxId(t.id);
+    setEditRefNo(t.referenceNo);
+    setEditType(t.type);
+    setEditCategory(t.category);
+    setEditAmount(String(t.amount));
+    setEditDescription(t.description);
+    setEditVendor(t.vendor === '-' ? '' : t.vendor);
+    setEditPaymentMethod(t.paymentMethod || 'Tunai Kas');
+    setEditTransactionDate(t.transactionDate);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTxId) return;
+    const numeric = Number(editAmount.replace(/[^0-9]/g, ''));
+    if (!numeric || numeric <= 0) return;
+
+    await updateTransaction(editingTxId, {
+      category: editCategory,
+      amount: numeric,
+      description: editDescription.trim() || `${editCategory} Angkatan ${activeAngkatan}`,
+      vendor: editVendor.trim() || '-',
+      paymentMethod: editPaymentMethod,
+      transactionDate: editTransactionDate,
+    });
+
+    setIsEditModalOpen(false);
+    setEditingTxId(null);
+  };
 
   const filtered = transactions.filter((t) => {
     const matchSearch =
@@ -181,13 +226,23 @@ export default function RiwayatTransaksiPage() {
                       </td>
                       {canEdit && (
                         <td className="py-3 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => deleteTransaction(t.id)}
-                            className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
-                          >
-                            Hapus
-                          </button>
+                          <div className="inline-flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(t)}
+                              className="text-amber-600 hover:text-amber-800 font-bold text-xs cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                            <span className="text-outline-variant/60">•</span>
+                            <button
+                              type="button"
+                              onClick={() => deleteTransaction(t.id)}
+                              className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
+                            >
+                              Hapus
+                            </button>
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -235,13 +290,22 @@ export default function RiwayatTransaksiPage() {
                         {formatRupiah(t.amount)}
                       </span>
                       {canEdit && (
-                        <button
-                          type="button"
-                          onClick={() => deleteTransaction(t.id)}
-                          className="mt-1.5 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 font-bold text-[11px] cursor-pointer"
-                        >
-                          Hapus
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5 mt-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(t)}
+                            className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold text-[11px] cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteTransaction(t.id)}
+                            className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[11px] cursor-pointer"
+                          >
+                            Hapus
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -251,6 +315,185 @@ export default function RiwayatTransaksiPage() {
           </>
         )}
       </div>
+
+      {/* Modal Edit Transaksi Riwayat */}
+      {isEditModalOpen && canEdit && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white text-slate-900 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl my-auto">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span
+                    className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      editType === 'pemasukan'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-rose-100 text-rose-800'
+                    }`}
+                  >
+                    {editType === 'pemasukan' ? 'BUKTI KAS MASUK' : 'BUKTI KAS KELUAR'}
+                  </span>
+                  <span className="font-mono text-xs text-slate-500 font-bold">
+                    {editRefNo}
+                  </span>
+                </div>
+                <h2 className="text-lg font-extrabold text-slate-900">
+                  Edit Mutasi Transaksi
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Perbaiki kesalahan nominal, tanggal, kategori, atau uraian pembukuan.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer px-1.5 py-0.5 rounded-lg hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-3.5 text-xs sm:text-sm">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Kategori Transaksi
+                </label>
+                <select
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 bg-white font-medium"
+                >
+                  {(editType === 'pemasukan'
+                    ? [
+                        'Iuran Anggota',
+                        'Donasi / Sponsorship',
+                        'Dana Sekolah / Pembinaan',
+                        'Kas Awal Angkatan',
+                        'Lainnya',
+                      ]
+                    : [
+                        'Perawatan Alat',
+                        'Konsumsi Latihan',
+                        'Kostum & Seragam',
+                        'Transportasi & Logistik',
+                        'ATK & Administrasi',
+                        'Lainnya',
+                      ]
+                  ).map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                  {/* Fallback jika kategori custom di luar list standar */}
+                  {![
+                    'Iuran Anggota',
+                    'Donasi / Sponsorship',
+                    'Dana Sekolah / Pembinaan',
+                    'Kas Awal Angkatan',
+                    'Perawatan Alat',
+                    'Konsumsi Latihan',
+                    'Kostum & Seragam',
+                    'Transportasi & Logistik',
+                    'ATK & Administrasi',
+                    'Lainnya',
+                  ].includes(editCategory) && (
+                    <option value={editCategory}>{editCategory}</option>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nominal Transaksi (Rp)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  placeholder="Contoh: 100000"
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Uraian / Keterangan
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Contoh: Uraian transaksi"
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {editType === 'pemasukan' ? 'Penyetor / Sumber' : 'Toko / Penerima'}
+                  </label>
+                  <input
+                    type="text"
+                    value={editVendor}
+                    onChange={(e) => setEditVendor(e.target.value)}
+                    placeholder="Opsional"
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Tanggal Transaksi
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editTransactionDate}
+                    onChange={(e) => setEditTransactionDate(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Metode Pembayaran
+                </label>
+                <select
+                  value={editPaymentMethod}
+                  onChange={(e) => setEditPaymentMethod(e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-medium"
+                >
+                  <option value="Tunai Kas">Tunai Kas</option>
+                  <option value="Transfer / QRIS">Transfer / QRIS</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold cursor-pointer hover:bg-slate-200 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className={`px-4 py-2 rounded-xl text-white text-xs font-bold cursor-pointer shadow transition ${
+                    editType === 'pemasukan'
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : 'bg-rose-600 hover:bg-rose-700'
+                  }`}
+                >
+                  Simpan Perubahan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

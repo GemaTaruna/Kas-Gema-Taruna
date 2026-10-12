@@ -356,6 +356,18 @@ interface AngkatanContextValue {
     }
   ) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
+  updateTransaction: (
+    id: string,
+    data: {
+      category?: string;
+      description?: string;
+      vendor?: string;
+      amount?: number;
+      paymentMethod?: string;
+      transactionDate?: string;
+      type?: 'pemasukan' | 'pengeluaran';
+    }
+  ) => Promise<void>;
   addMember: (
     m: Omit<
       MemberItem,
@@ -1084,6 +1096,61 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       await (supabase as any).from('kgt_transactions').delete().eq('id', id);
     } catch {
       // Deleted from localStorage
+    }
+  };
+
+  const updateTransaction = async (
+    id: string,
+    data: {
+      category?: string;
+      description?: string;
+      vendor?: string;
+      amount?: number;
+      paymentMethod?: string;
+      transactionDate?: string;
+      type?: 'pemasukan' | 'pengeluaran';
+    }
+  ) => {
+    if (!canEdit) return;
+    setTxByAngkatan((prev) => {
+      const updatedList = (prev[activeAngkatan] || []).map((t) => {
+        if (t.id !== id) return t;
+        return {
+          ...t,
+          category: data.category !== undefined ? data.category : t.category,
+          description: data.description !== undefined ? data.description : t.description,
+          vendor: data.vendor !== undefined ? data.vendor : t.vendor,
+          amount: data.amount !== undefined ? Number(data.amount) : t.amount,
+          paymentMethod: data.paymentMethod !== undefined ? data.paymentMethod : t.paymentMethod,
+          transactionDate: data.transactionDate !== undefined ? data.transactionDate : t.transactionDate,
+          type: data.type !== undefined ? data.type : t.type,
+        };
+      });
+      const updated = {
+        ...prev,
+        [activeAngkatan]: updatedList,
+      };
+      localStorage.setItem('kgt_real_tx_v4', JSON.stringify(updated));
+      return updated;
+    });
+
+    try {
+      const supabase = createClient();
+      const payload: Record<string, any> = {};
+      if (data.category !== undefined) payload.category = data.category;
+      if (data.description !== undefined) payload.description = data.description;
+      if (data.vendor !== undefined) payload.vendor = data.vendor;
+      if (data.amount !== undefined) payload.amount = Number(data.amount);
+      if (data.paymentMethod !== undefined) payload.payment_method = data.paymentMethod;
+      if (data.transactionDate !== undefined) payload.transaction_date = data.transactionDate;
+      if (data.type !== undefined) payload.type = data.type;
+
+      await (supabase as any)
+        .from('kgt_transactions')
+        .update(payload)
+        .eq('id', id);
+    } catch {
+      // Updated in localStorage
     }
   };
 
@@ -1820,6 +1887,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         saldoAkhir,
         addTransaction,
         deleteTransaction,
+        updateTransaction,
         addMember,
         importMembersBulk,
         deleteMember,
