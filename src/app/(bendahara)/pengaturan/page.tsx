@@ -50,6 +50,8 @@ export default function PengaturanPage() {
     activeAngkatan,
     cloudStatus,
     syncLocalToCloud,
+    refreshFromCloud,
+    members,
     duesNominal,
     setDuesNominal,
     waTemplate,
@@ -91,6 +93,12 @@ export default function PengaturanPage() {
     setTimeout(() => setSyncMessage(''), 6000);
   };
 
+  const handleRefreshCloud = async () => {
+    await refreshFromCloud();
+    setSyncMessage('Berhasil mengambil data terbaru dari server Cloud Supabase!');
+    setTimeout(() => setSyncMessage(''), 6000);
+  };
+
   return (
     <div className="p-3 sm:p-6 flex flex-col gap-5 max-w-[1440px] mx-auto w-full">
       <div>
@@ -113,7 +121,7 @@ export default function PengaturanPage() {
             : 'bg-amber-50 border-amber-300 text-amber-950'
         }`}
       >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <span
@@ -125,14 +133,14 @@ export default function PengaturanPage() {
               />
               <h2 className="text-sm sm:text-base font-extrabold">
                 {cloudStatus === 'connected'
-                  ? 'Database Cloud Supabase Aktif (Bisa Digunakan di Semua Perangkat)'
+                  ? `Database Cloud Supabase Aktif (${members.length} Siswa Terdaftar)`
                   : 'Tabel Database Cloud Belum Diaktifkan di Supabase (Saat Ini Tersimpan di Cache Lokal)'}
               </h2>
             </div>
             <p className="text-xs mt-1 opacity-90">
               {cloudStatus === 'connected'
-                ? 'Seluruh data siswa, pembayaran iuran, dan transaksi kas otomatis tersimpan ke server Supabase dan dapat dibuka dari HP maupun Laptop mana saja.'
-                : 'Agar 77 siswa yang sudah Anda import di perangkat ini langsung muncul di HP dan perangkat lain, klik "Salin Kode SQL", tempel di menu SQL Editor pada Dashboard Supabase Anda, lalu klik Run (cukup 1x saja).'}
+                ? `Data di perangkat ini saat ini mencatat ${members.length} siswa. Klik "Unggah Data Perangkat Ini ke Cloud" untuk memastikan seluruh data di perangkat ini tersimpan permanen di cloud.`
+                : 'Agar data siswa yang ada di perangkat ini langsung muncul di HP dan perangkat lain, klik "Salin Kode SQL", tempel di menu SQL Editor pada Dashboard Supabase Anda, lalu klik Run.'}
             </p>
           </div>
 
@@ -149,9 +157,16 @@ export default function PengaturanPage() {
             <button
               type="button"
               onClick={handleManualSync}
-              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs cursor-pointer shadow-xs"
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs cursor-pointer shadow-xs transition"
             >
-              ☁️ Sinkronkan Data ke Cloud Sekarang
+              ☁️ Unggah Data Perangkat Ini ke Cloud ({members.length} Siswa)
+            </button>
+            <button
+              type="button"
+              onClick={handleRefreshCloud}
+              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs cursor-pointer shadow-xs transition"
+            >
+              📥 Ambil Data Terbaru dari Cloud
             </button>
           </div>
         </div>

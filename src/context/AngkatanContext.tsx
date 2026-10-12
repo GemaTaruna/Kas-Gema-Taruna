@@ -248,6 +248,31 @@ export function formatWhatsAppLink(
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
 }
 
+export function isValidUUID(str: string | null | undefined): boolean {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+}
+
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      // fallback
+    }
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+export function ensureUUID(id?: string | null): string {
+  if (id && isValidUUID(id)) return id;
+  return generateUUID();
+}
+
 // Helper untuk encode/decode kelas & paidSessions ke kolom Supabase yang sudah ada
 function encodeStatusField(kelas: string, status: string): string {
   return `${kelas || '-'}||${status || 'Aktif'}`;
@@ -323,6 +348,7 @@ interface AngkatanContextValue {
   canEdit: boolean;
   cloudStatus: CloudSyncStatus;
   syncLocalToCloud: () => Promise<{ ok: boolean; message: string }>;
+  refreshFromCloud: () => Promise<void>;
   duesNominal: number; // Default Rp 5.000 per pertemuan
   setDuesNominal: (val: number) => void;
   waTemplate: string;
@@ -580,7 +606,35 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
             }
 
             const list = rawList.filter((m: any) => m.member_code !== '__CONFIG__');
-            if (list.length > 0) {
+            const localList = localMembersSnapshot[a] || [];
+
+            // Jika di Cloud kosong atau data di perangkat ini LEBIH BANYAK (misal HP ada 90 siswa, di Cloud cuma 0 atau 77 dummy),
+            // utamakan data lokal yang lebih lengkap dan otomatis sinkronkan ke Supabase Cloud!
+            if (localList.length > list.length) {
+              const updatedLocalList = localList.map((item) => ({
+                ...item,
+                id: ensureUUID(item.id),
+              }));
+              grouped[a] = updatedLocalList;
+              try {
+                const dbPayload = updatedLocalList.map((item) => ({
+                  id: item.id,
+                  angkatan: a,
+                  member_code: item.memberCode,
+                  full_name: item.fullName,
+                  section: item.section,
+                  instrument: item.instrument,
+                  phone: item.phone,
+                  status: encodeStatusField(item.kelas, item.status),
+                  dues_status: (item.allPaidKeys || []).length > 0 ? 'LUNAS' : 'BELUM BAYAR',
+                  paid_at: encodePaidData(item.allPaidKeys || [], item.paidSessionDates || {}),
+                  dues_amount: item.duesAmount || 5000,
+                }));
+                await (supabase as any).from('kgt_members').upsert(dbPayload);
+              } catch {
+                // saved locally
+              }
+            } else if (list.length > 0) {
               grouped[a] = list.map((m: any) => {
                 const { kelas, status } = decodeStatusField(m.status);
                 const { allPaidKeys, paidSessionDates } = decodePaidData(
@@ -606,24 +660,6 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
                   duesAmount: Number(m.dues_amount || 5000),
                 };
               });
-            } else if ((localMembersSnapshot[a] || []).length > 0) {
-              // Jika di Cloud masih kosong tapi di LocalStorage perangkat ini sudah ada data (misal 77 siswa hasil import),
-              // pertahankan data lokal DAN otomatis unggah ke Supabase Cloud!
-              grouped[a] = localMembersSnapshot[a];
-              const dbPayload = localMembersSnapshot[a].map((item) => ({
-                id: item.id,
-                angkatan: a,
-                member_code: item.memberCode,
-                full_name: item.fullName,
-                section: item.section,
-                instrument: item.instrument,
-                phone: item.phone,
-                status: encodeStatusField(item.kelas, item.status),
-                dues_status: (item.allPaidKeys || []).length > 0 ? 'LUNAS' : 'BELUM BAYAR',
-                paid_at: encodePaidData(item.allPaidKeys || [], item.paidSessionDates || {}),
-                dues_amount: item.duesAmount || 5000,
-              }));
-              await (supabase as any).from('kgt_members').upsert(dbPayload);
             }
           }
 
@@ -723,7 +759,11 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       for (const a of ANGKATAN_LIST) {
         const mList = membersByAngkatan[a] || [];
         if (mList.length > 0) {
-          const dbPayload = mList.map((item) => ({
+          const updatedMList = mList.map((item) => ({
+            ...item,
+            id: ensureUUID(item.id),
+          }));
+          const dbPayload = updatedMList.map((item) => ({
             id: item.id,
             angkatan: a,
             member_code: item.memberCode,
@@ -742,7 +782,11 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
 
         const tList = txByAngkatan[a] || [];
         if (tList.length > 0) {
-          const txPayload = tList.map((t) => ({
+          const updatedTList = tList.map((t) => ({
+            ...t,
+            id: ensureUUID(t.id),
+          }));
+          const txPayload = updatedTList.map((t) => ({
             id: t.id,
             angkatan: a,
             reference_no: t.referenceNo,
@@ -770,6 +814,136 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         ok: false,
         message: 'Gagal menghubungi server Supabase. Periksa koneksi internet Anda.',
       };
+    }
+  };
+
+  const refreshFromCloud = async () => {
+    try {
+      const supabase = createClient();
+      const { data: dbMembers, error: errMembers } = await (supabase as any)
+        .from('kgt_members')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (errMembers) {
+        if (errMembers.code === 'PGRST205' || errMembers.status === 404) {
+          setCloudStatus('table_missing');
+        }
+        return;
+      }
+
+      setCloudStatus('connected');
+
+      if (dbMembers) {
+        const grouped: Record<AngkatanId, MemberItem[]> = {
+          '16': [],
+          '17': [],
+          '18': [],
+          '19': [],
+          '20': [],
+          '21': [],
+        };
+        const loadedCounts: Record<AngkatanId, Record<string, number>> = {
+          '16': {},
+          '17': {},
+          '18': {},
+          '19': {},
+          '20': {},
+          '21': {},
+        };
+
+        for (const a of ANGKATAN_LIST) {
+          const rawList = dbMembers.filter((m: any) => m.angkatan === a);
+          const configRow = rawList.find((m: any) => m.member_code === '__CONFIG__');
+          if (configRow && configRow.paid_at) {
+            try {
+              const parsedCfg = JSON.parse(configRow.paid_at);
+              if (parsedCfg && typeof parsedCfg.monthCounts === 'object') {
+                loadedCounts[a] = parsedCfg.monthCounts;
+              }
+            } catch {
+              // ignore
+            }
+          }
+
+          const list = rawList.filter((m: any) => m.member_code !== '__CONFIG__');
+          if (list.length > 0) {
+            grouped[a] = list.map((m: any) => {
+              const { kelas, status } = decodeStatusField(m.status);
+              const { allPaidKeys, paidSessionDates } = decodePaidData(
+                m.paid_at,
+                defaultMonth
+              );
+              return {
+                id: m.id,
+                angkatan: m.angkatan,
+                memberCode: m.member_code,
+                fullName: m.full_name,
+                kelas,
+                section: m.section || 'BRASS',
+                instrument: m.instrument || 'Terompet',
+                phone: m.phone || '',
+                status,
+                duesStatus: 'BELUM BAYAR',
+                paidAt: m.paid_at || '[]',
+                paidSessions: [],
+                allPaidKeys,
+                paidSessionDates,
+                arrears: [],
+                duesAmount: Number(m.dues_amount || 5000),
+              };
+            });
+          }
+        }
+
+        setMembersByAngkatan(grouped);
+        localStorage.setItem('kgt_real_members_v4', JSON.stringify(grouped));
+
+        setMonthCountsByAngkatan((prev) => {
+          const merged: Record<AngkatanId, Record<string, number>> = { ...prev };
+          ANGKATAN_LIST.forEach((a) => {
+            merged[a] = { ...(prev[a] || {}), ...(loadedCounts[a] || {}) };
+          });
+          localStorage.setItem('kgt_month_counts_v4', JSON.stringify(merged));
+          return merged;
+        });
+      }
+
+      const { data: dbTx, error: errTx } = await (supabase as any)
+        .from('kgt_transactions')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!errTx && dbTx) {
+        const groupedTx: Record<AngkatanId, TransactionItem[]> = {
+          '16': [],
+          '17': [],
+          '18': [],
+          '19': [],
+          '20': [],
+          '21': [],
+        };
+        for (const a of ANGKATAN_LIST) {
+          const list = dbTx.filter((t: any) => t.angkatan === a);
+          groupedTx[a] = list.map((t: any) => ({
+            id: t.id,
+            angkatan: t.angkatan,
+            referenceNo: t.reference_no,
+            type: t.type,
+            category: t.category,
+            description: t.description,
+            vendor: t.vendor || '-',
+            amount: Number(t.amount),
+            paymentMethod: t.payment_method || 'Tunai Kas',
+            recordedBy: t.recorded_by || 'Admin',
+            transactionDate: t.transaction_date,
+          }));
+        }
+        setTxByAngkatan(groupedTx);
+        localStorage.setItem('kgt_real_tx_v4', JSON.stringify(groupedTx));
+      }
+    } catch {
+      // ignore
     }
   };
 
@@ -1030,10 +1204,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     if (!canEdit) return;
     const prefix = tx.type === 'pemasukan' ? 'BKM' : 'BKK';
     const seq = String((txByAngkatan[activeAngkatan]?.length || 0) + 1).padStart(3, '0');
-    const newId =
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${prefix}-${activeAngkatan}-${Date.now()}`;
+    const newId = generateUUID();
 
     const refNo = tx.customRefNo || `${prefix}-${activeAngkatan}-${seq}`;
 
@@ -1168,10 +1339,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     >
   ) => {
     if (!canEdit) return;
-    const newId =
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `m${activeAngkatan}-${Date.now()}`;
+    const newId = generateUUID();
 
     const initialPaidAt = encodePaidData([], {});
 
@@ -1236,10 +1404,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       const code = seq.toUpperCase().startsWith('MB')
         ? seq
         : `MB${activeAngkatan}-${seq.padStart(2, '0')}`;
-      const newId =
-        typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `m${activeAngkatan}-${Date.now()}-${idx}`;
+      const newId = generateUUID();
 
       const upperSec = (r.seksi || 'BRASS').trim().toUpperCase();
       const matchedSec =
@@ -1488,10 +1653,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         // Updated locally
       }
     } else {
-      const newId =
-        typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `REKAP-${angkatan}-${Date.now()}`;
+      const newId = generateUUID();
 
       const newTx: TransactionItem = {
         id: newId,
@@ -1861,6 +2023,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         canEdit,
         cloudStatus,
         syncLocalToCloud,
+        refreshFromCloud,
         duesNominal,
         setDuesNominal,
         waTemplate,
