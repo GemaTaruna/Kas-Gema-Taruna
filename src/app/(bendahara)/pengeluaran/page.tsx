@@ -14,7 +14,11 @@ export default function PengeluaranPage() {
     addTransaction,
     deleteTransaction,
     updateTransaction,
+    clearTransactions,
   } = useAngkatan();
+
+  const [toastMsg, setToastMsg] = useState('');
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   const [category, setCategory] = useState('Perawatan Alat');
   const [amount, setAmount] = useState('');
@@ -24,6 +28,17 @@ export default function PengeluaranPage() {
   const [transactionDate, setTransactionDate] = useState(() =>
     new Date().toISOString().slice(0, 10)
   );
+
+  const handleClearAllExpenses = async () => {
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus SEMUA catatan pengeluaran kas MB${activeAngkatan}? Tindakan ini akan menghapus seluruh data belanja MB${activeAngkatan} dari sistem dan cloud.`)) {
+      return;
+    }
+    setIsDeletingAll(true);
+    await clearTransactions('pengeluaran');
+    setIsDeletingAll(false);
+    setToastMsg(`Seluruh catatan pengeluaran kas MB${activeAngkatan} berhasil dibersihkan!`);
+    setTimeout(() => setToastMsg(''), 6000);
+  };
 
   // State Edit Pengeluaran
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -91,17 +106,40 @@ export default function PengeluaranPage() {
 
   return (
     <div className="p-4 sm:p-6 flex flex-col gap-6 max-w-[1440px] mx-auto w-full">
-      <div>
-        <span className="text-xs font-bold uppercase tracking-wider text-error">
-          BUKU KAS KELUAR (BKK)
-        </span>
-        <h1 className="text-xl sm:text-2xl font-extrabold text-on-surface">
-          Pengeluaran Kas — Angkatan {activeAngkatan} (MB{activeAngkatan})
-        </h1>
-        <p className="text-xs sm:text-sm text-on-surface-variant">
-          Pencatatan seluruh belanja & pengeluaran khusus untuk Buku Kas Angkatan {activeAngkatan}.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <span className="text-xs font-bold uppercase tracking-wider text-error">
+            BUKU KAS KELUAR (BKK)
+          </span>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-on-surface">
+            Pengeluaran Kas — Angkatan {activeAngkatan} (MB{activeAngkatan})
+          </h1>
+          <p className="text-xs sm:text-sm text-on-surface-variant">
+            Pencatatan seluruh belanja & pengeluaran khusus untuk Buku Kas Angkatan {activeAngkatan}.
+          </p>
+        </div>
+
+        {canEdit && expenseList.length > 0 && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleClearAllExpenses}
+              disabled={isDeletingAll}
+              className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs cursor-pointer shadow-xs transition flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-sm">delete_sweep</span>
+              {isDeletingAll ? 'Menghapus...' : `Hapus Semua Pengeluaran MB${activeAngkatan}`}
+            </button>
+          </div>
+        )}
       </div>
+
+      {toastMsg && (
+        <div className="p-3.5 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between">
+          <span>✓ {toastMsg}</span>
+          <button type="button" onClick={() => setToastMsg('')} className="text-emerald-700 hover:text-emerald-900 font-extrabold cursor-pointer">✕</button>
+        </div>
+      )}
 
       {/* Ringkasan Pengeluaran */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

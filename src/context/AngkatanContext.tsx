@@ -9,7 +9,7 @@ export type CloudSyncStatus = 'checking' | 'connected' | 'table_missing';
 
 export const SECTION_OPTIONS: Record<string, string[]> = {
   'BRASS': ['Terompet', 'Bariton'],
-  'PERCUSSION': ['Bass Drum', 'Snare Drum', 'Tenor', 'Simbal'],
+  'PERCUSSION': ['Bass Drum', 'Snare Drum', 'Tenor', 'Simbal', 'Quarto'],
   'PIT INSTRUMENT': ['Belira'],
   'COLOR GUARD': ['Bendera'],
   'LEADERSHIP': ['Field Commander', 'Stickmaster Taruna', 'Stickmaster Taruni'],
@@ -448,6 +448,13 @@ interface AngkatanContextValue {
     sessionIdOrAll: string,
     targetMemberIds?: string[]
   ) => Promise<void>;
+  recalculateAllRecapTransactions: (
+    targetAngkatan?: AngkatanId,
+    customMembersList?: MemberItem[]
+  ) => Promise<void>;
+  clearTransactions: (
+    targetType: 'all' | 'pengeluaran' | 'pemasukan_manual'
+  ) => Promise<void>;
 }
 
 const AngkatanContext = createContext<AngkatanContextValue | null>(null);
@@ -484,6 +491,215 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
   const [txByAngkatan, setTxByAngkatan] = useState<Record<AngkatanId, TransactionItem[]>>(
     EMPTY_TRANSACTIONS_BY_ANGKATAN
   );
+
+  const canEdit =
+    role === 'superadmin' ||
+    (role === 'admin_angkatan' && lockedAngkatan === activeAngkatan);
+
+  // Hitung ulang seluruh baris rekap iuran kas harian (REKAP-MB${angkatan}-YYYY-MM-DD)
+  // agar 100% akurat sesuai dengan data riil pembayaran anggota yang ada saat ini.
+  const recalculateAllRecapTransactions = async (
+    targetAngkatan?: AngkatanId,
+    customMembersList?: MemberItem[]
+  ) => {
+    const angkatan = targetAngkatan || activeAngkatan;
+    const currentMemberList =
+      customMembersList || membersByAngkatan[angkatan] || [];
+
+    const dateStatsMap: Record<
+      string,
+      { count: number; students: Set<string>; breakdown: Record<string, number> }
+    > = {};
+
+    currentMemberList.forEach((m) => {
+      const datesObj = m.paidSessionDates || {};
+      (m.allPaidKeys || []).forEach((fullKey) => {
+        const payDate = datesObj[fullKey] || activePaymentDate || defaultToday;
+        if (!dateStatsMap[payDate]) {
+          dateStatsMap[payDate] = { count: 0, students: new Set(), breakdown: {} };
+        }
+        dateStatsMap[payDate].count += 1;
+        dateStatsMap[payDate].students.add(m.id);
+        const { monthKey, sessionId } = parseSessionKey(fullKey, activeMonth);
+        const label = `${sessionId} ${formatMonthShort(monthKey)}`;
+        dateStatsMap[payDate].breakdown[label] =
+          (dateStatsMap[payDate].breakdown[label] || 0) + 1;
+      });
+    });
+
+    const recapPrefix = `REKAP-MB${angkatan}-`;
+
+    let deadRecapIds: string[] = [];
+    let recapsToUpsert: TransactionItem[] = [];
+
+    setTxByAngkatan((prev) => {
+      deadRecapIds = [];
+      recapsToUpsert = [];
+      const existingTxList = prev[angkatan] || [];
+      const nonRecapTx = existingTxList.filter(
+        (t) => !t.referenceNo.startsWith(recapPrefix)
+      );
+      const existingRecaps = existingTxList.filter((t) =>
+        t.referenceNo.startsWith(recapPrefix)
+      );
+
+      const updatedRecaps: TransactionItem[] = [];
+      const remainingStatsMap = { ...dateStatsMap };
+
+      existingRecaps.forEach((t) => {
+        const datePart = t.referenceNo.replace(recapPrefix, '');
+        const stats = remainingStatsMap[datePart];
+        if (!stats || stats.count === 0) {
+          deadRecapIds.push(t.id);
+        } else {
+          const totalRupiah = stats.count * duesNominal;
+          const breakdownStr = Object.entries(stats.breakdown)
+            .map(([lbl, cnt]) => `${cnt}x ${lbl}`)
+            .join(', ');
+          const descriptionText = `Rekap Iuran Siswa (${stats.count} pembayaran: ${breakdownStr})`;
+          const vendorText = `${stats.students.size} Siswa MB${angkatan}`;
+
+          const item: TransactionItem = {
+            ...t,
+            description: descriptionText,
+            vendor: vendorText,
+            amount: totalRupiah,
+            recordedBy: username || 'Admin',
+            transactionDate: datePart,
+          };
+          updatedRecaps.push(item);
+          recapsToUpsert.push(item);
+          delete remainingStatsMap[datePart];
+        }
+      });
+
+      Object.entries(remainingStatsMap).forEach(([datePart, stats]) => {
+        if (stats.count > 0) {
+          const totalRupiah = stats.count * duesNominal;
+          const breakdownStr = Object.entries(stats.breakdown)
+            .map(([lbl, cnt]) => `${cnt}x ${lbl}`)
+            .join(', ');
+          const descriptionText = `Rekap Iuran Siswa (${stats.count} pembayaran: ${breakdownStr})`;
+          const vendorText = `${stats.students.size} Siswa MB${angkatan}`;
+
+          const item: TransactionItem = {
+            id: generateUUID(),
+            angkatan,
+            referenceNo: `${recapPrefix}${datePart}`,
+            type: 'pemasukan',
+            category: 'Iuran Anggota',
+            description: descriptionText,
+            vendor: vendorText,
+            amount: totalRupiah,
+            paymentMethod: 'Tunai Kas',
+            recordedBy: username || 'Admin',
+            transactionDate: datePart,
+          };
+          updatedRecaps.push(item);
+          recapsToUpsert.push(item);
+        }
+      });
+
+      const finalTxList = [...updatedRecaps, ...nonRecapTx];
+      const updated = {
+        ...prev,
+        [angkatan]: finalTxList,
+      };
+      try {
+        localStorage.setItem('kgt_real_tx_v4', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+
+    try {
+      const supabase = createClient();
+      if (deadRecapIds.length > 0) {
+        await (supabase as any)
+          .from('kgt_transactions')
+          .delete()
+          .in('id', deadRecapIds);
+      }
+      if (recapsToUpsert.length > 0) {
+        const payload = recapsToUpsert.map((t) => ({
+          id: t.id,
+          angkatan: t.angkatan,
+          reference_no: t.referenceNo,
+          type: t.type,
+          category: t.category,
+          description: t.description,
+          vendor: t.vendor,
+          amount: t.amount,
+          payment_method: t.paymentMethod,
+          recorded_by: t.recordedBy,
+          transaction_date: t.transactionDate,
+        }));
+        await (supabase as any).from('kgt_transactions').upsert(payload);
+      }
+    } catch {
+      // Ignored
+    }
+  };
+
+  const clearTransactions = async (
+    targetType: 'all' | 'pengeluaran' | 'pemasukan_manual'
+  ) => {
+    if (!canEdit) return;
+    const recapPrefix = `REKAP-MB${activeAngkatan}-`;
+    let idsToDelete: string[] = [];
+
+    setTxByAngkatan((prev) => {
+      idsToDelete = [];
+      const currentList = prev[activeAngkatan] || [];
+      let remainingList: TransactionItem[] = [];
+
+      if (targetType === 'all') {
+        idsToDelete = currentList.map((t) => t.id);
+        remainingList = [];
+      } else if (targetType === 'pengeluaran') {
+        idsToDelete = currentList
+          .filter((t) => t.type === 'pengeluaran')
+          .map((t) => t.id);
+        remainingList = currentList.filter((t) => t.type !== 'pengeluaran');
+      } else if (targetType === 'pemasukan_manual') {
+        idsToDelete = currentList
+          .filter(
+            (t) =>
+              t.type === 'pemasukan' && !t.referenceNo.startsWith(recapPrefix)
+          )
+          .map((t) => t.id);
+        remainingList = currentList.filter((t) => !idsToDelete.includes(t.id));
+      }
+
+      const updated = {
+        ...prev,
+        [activeAngkatan]: remainingList,
+      };
+      try {
+        localStorage.setItem('kgt_real_tx_v4', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+
+    try {
+      const supabase = createClient();
+      if (idsToDelete.length > 0) {
+        await (supabase as any)
+          .from('kgt_transactions')
+          .delete()
+          .in('id', idsToDelete);
+      }
+    } catch {
+      // ignore
+    }
+
+    if (targetType === 'all') {
+      await recalculateAllRecapTransactions(activeAngkatan);
+    }
+  };
 
   useEffect(() => {
     const savedRole = (getCookieValue('kgt_session_role') as AppRole) || 'superadmin';
@@ -572,6 +788,8 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         }
 
         setCloudStatus('connected');
+
+        let membersLoaded: Record<AngkatanId, MemberItem[]> | null = null;
 
         if (dbMembers) {
           const grouped: Record<AngkatanId, MemberItem[]> = {
@@ -663,6 +881,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
             }
           }
 
+          membersLoaded = grouped;
           setMembersByAngkatan(grouped);
           localStorage.setItem('kgt_real_members_v4', JSON.stringify(grouped));
 
@@ -726,6 +945,10 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
           }
           setTxByAngkatan(groupedTx);
           localStorage.setItem('kgt_real_tx_v4', JSON.stringify(groupedTx));
+
+          for (const a of ANGKATAN_LIST) {
+            await recalculateAllRecapTransactions(a, membersLoaded ? membersLoaded[a] : undefined);
+          }
         }
       } catch {
         // Fallback to localStorage
@@ -755,6 +978,10 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
 
       let totalMembersSynced = 0;
       let totalTxSynced = 0;
+
+      for (const a of ANGKATAN_LIST) {
+        await recalculateAllRecapTransactions(a);
+      }
 
       for (const a of ANGKATAN_LIST) {
         const mList = membersByAngkatan[a] || [];
@@ -834,6 +1061,8 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
 
       setCloudStatus('connected');
 
+      let membersLoaded: Record<AngkatanId, MemberItem[]> | null = null;
+
       if (dbMembers) {
         const grouped: Record<AngkatanId, MemberItem[]> = {
           '16': [],
@@ -896,6 +1125,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
+        membersLoaded = grouped;
         setMembersByAngkatan(grouped);
         localStorage.setItem('kgt_real_members_v4', JSON.stringify(grouped));
 
@@ -941,6 +1171,10 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         }
         setTxByAngkatan(groupedTx);
         localStorage.setItem('kgt_real_tx_v4', JSON.stringify(groupedTx));
+
+        for (const a of ANGKATAN_LIST) {
+          await recalculateAllRecapTransactions(a, membersLoaded ? membersLoaded[a] : undefined);
+        }
       }
     } catch {
       // ignore
@@ -1120,10 +1354,6 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     document.cookie = 'kgt_session_locked_angkatan=; path=/; max-age=0';
     document.cookie = 'kgt_active_angkatan=; path=/; max-age=0';
   };
-
-  const canEdit =
-    role === 'superadmin' ||
-    (role === 'admin_angkatan' && lockedAngkatan === activeAngkatan);
 
   const rawMembers = membersByAngkatan[activeAngkatan] || [];
 
@@ -1461,6 +1691,11 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       // Saved in localStorage
     }
 
+    await recalculateAllRecapTransactions(activeAngkatan, [
+      ...(membersByAngkatan[activeAngkatan] || []),
+      ...newItems,
+    ]);
+
     return newItems.length;
   };
 
@@ -1552,151 +1787,17 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Deleted locally
     }
+
+    await recalculateAllRecapTransactions(activeAngkatan, []);
   };
 
-  // Sinkronisasi 1 Baris Rekap Pemasukan Kas Harian untuk Tanggal Penerimaan (targetDate)
+  // Sinkronisasi Rekap Pemasukan Kas Iuran Anggota ke Buku Kas Masuk
   const syncDailyRecapTransaction = async (
     angkatan: AngkatanId,
-    targetDate: string,
-    updatedMembersList: MemberItem[]
+    _targetDate?: string,
+    updatedMembersList?: MemberItem[]
   ) => {
-    const recapRefNo = `REKAP-MB${angkatan}-${targetDate}`;
-
-    let totalPaymentsCount = 0;
-    const uniqueStudents = new Set<string>();
-    const breakdownMap: Record<string, number> = {};
-
-    updatedMembersList.forEach((m) => {
-      const datesObj = m.paidSessionDates || {};
-      (m.allPaidKeys || []).forEach((fullKey) => {
-        const pDate = datesObj[fullKey];
-        if (pDate === targetDate) {
-          totalPaymentsCount += 1;
-          uniqueStudents.add(m.id);
-          const { monthKey, sessionId } = parseSessionKey(fullKey, activeMonth);
-          const label = `${sessionId} ${formatMonthShort(monthKey)}`;
-          breakdownMap[label] = (breakdownMap[label] || 0) + 1;
-        }
-      });
-    });
-
-    const totalRupiah = totalPaymentsCount * duesNominal;
-    const breakdownStr = Object.entries(breakdownMap)
-      .map(([lbl, cnt]) => `${cnt}x ${lbl}`)
-      .join(', ');
-
-    const existingList = txByAngkatan[angkatan] || [];
-    const existingRecap = existingList.find((t) => t.referenceNo === recapRefNo);
-
-    if (totalPaymentsCount === 0) {
-      setTxByAngkatan((prev) => {
-        const updated = {
-          ...prev,
-          [angkatan]: (prev[angkatan] || []).filter(
-            (t) => t.referenceNo !== recapRefNo
-          ),
-        };
-        localStorage.setItem('kgt_real_tx_v4', JSON.stringify(updated));
-        return updated;
-      });
-
-      try {
-        const supabase = createClient();
-        await (supabase as any)
-          .from('kgt_transactions')
-          .delete()
-          .eq('angkatan', angkatan)
-          .eq('reference_no', recapRefNo);
-      } catch {
-        // Deleted locally
-      }
-      return;
-    }
-
-    const descriptionText = `Rekap Iuran Siswa (${totalPaymentsCount} pembayaran: ${breakdownStr})`;
-    const vendorText = `${uniqueStudents.size} Siswa MB${angkatan}`;
-
-    if (existingRecap) {
-      const updatedTx: TransactionItem = {
-        ...existingRecap,
-        description: descriptionText,
-        vendor: vendorText,
-        amount: totalRupiah,
-        recordedBy: username,
-        transactionDate: targetDate,
-      };
-
-      setTxByAngkatan((prev) => {
-        const updated = {
-          ...prev,
-          [angkatan]: (prev[angkatan] || []).map((t) =>
-            t.referenceNo === recapRefNo ? updatedTx : t
-          ),
-        };
-        localStorage.setItem('kgt_real_tx_v4', JSON.stringify(updated));
-        return updated;
-      });
-
-      try {
-        const supabase = createClient();
-        await (supabase as any)
-          .from('kgt_transactions')
-          .update({
-            description: descriptionText,
-            vendor: vendorText,
-            amount: totalRupiah,
-            recorded_by: username,
-            transaction_date: targetDate,
-          })
-          .eq('id', existingRecap.id);
-      } catch {
-        // Updated locally
-      }
-    } else {
-      const newId = generateUUID();
-
-      const newTx: TransactionItem = {
-        id: newId,
-        angkatan,
-        referenceNo: recapRefNo,
-        type: 'pemasukan',
-        category: 'Iuran Anggota',
-        description: descriptionText,
-        vendor: vendorText,
-        amount: totalRupiah,
-        paymentMethod: 'Tunai Kas',
-        recordedBy: username,
-        transactionDate: targetDate,
-      };
-
-      setTxByAngkatan((prev) => {
-        const updated = {
-          ...prev,
-          [angkatan]: [newTx, ...(prev[angkatan] || [])],
-        };
-        localStorage.setItem('kgt_real_tx_v4', JSON.stringify(updated));
-        return updated;
-      });
-
-      try {
-        const supabase = createClient();
-        await (supabase as any).from('kgt_transactions').insert({
-          id: newId,
-          angkatan,
-          reference_no: recapRefNo,
-          type: 'pemasukan',
-          category: 'Iuran Anggota',
-          description: descriptionText,
-          vendor: vendorText,
-          amount: totalRupiah,
-          payment_method: 'Tunai Kas',
-          recorded_by: username,
-          transaction_date: targetDate,
-        });
-      } catch {
-        // Inserted locally
-      }
-    }
+    await recalculateAllRecapTransactions(angkatan, updatedMembersList);
   };
 
   const toggleSessionDues = async (
@@ -2061,6 +2162,8 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         clearMemberMonthDues,
         markAllMembersSessionDues,
         clearAllMembersSessionDues,
+        recalculateAllRecapTransactions,
+        clearTransactions,
       }}
     >
       {children}

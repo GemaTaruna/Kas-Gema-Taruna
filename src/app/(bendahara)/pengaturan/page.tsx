@@ -48,10 +48,13 @@ create policy "Public access kgt_transactions" on public.kgt_transactions for al
 export default function PengaturanPage() {
   const {
     activeAngkatan,
+    canEdit,
     cloudStatus,
     syncLocalToCloud,
     refreshFromCloud,
     members,
+    recalculateAllRecapTransactions,
+    clearTransactions,
     duesNominal,
     setDuesNominal,
     waTemplate,
@@ -63,6 +66,37 @@ export default function PengaturanPage() {
   const [savedToast, setSavedToast] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
   const [copiedSql, setCopiedSql] = useState(false);
+  const [cashActionLoading, setCashActionLoading] = useState(false);
+
+  const handleRecalculateRecaps = async () => {
+    setCashActionLoading(true);
+    await recalculateAllRecapTransactions(activeAngkatan);
+    setCashActionLoading(false);
+    setSyncMessage(`✓ Berhasil menghitung ulang & menyinkronkan seluruh rekap pemasukan iuran sesuai ${members.length} siswa MB${activeAngkatan}!`);
+    setTimeout(() => setSyncMessage(''), 6000);
+  };
+
+  const handleClearExpenses = async () => {
+    if (!window.confirm(`Hapus SEMUA data pengeluaran kas MB${activeAngkatan}? Seluruh catatan belanja lama akan dibersihkan dari perangkat dan database Cloud.`)) {
+      return;
+    }
+    setCashActionLoading(true);
+    await clearTransactions('pengeluaran');
+    setCashActionLoading(false);
+    setSyncMessage(`✓ Seluruh catatan pengeluaran kas MB${activeAngkatan} berhasil dibersihkan!`);
+    setTimeout(() => setSyncMessage(''), 6000);
+  };
+
+  const handleResetCashbook = async () => {
+    if (!window.confirm(`PERINGATAN: Apakah Anda yakin ingin mereset seluruh mutasi kas MB${activeAngkatan}? Seluruh pengeluaran dummy akan dihapus dan rekap pemasukan iuran akan dihitung ulang murni dari data ${members.length} siswa saat ini.`)) {
+      return;
+    }
+    setCashActionLoading(true);
+    await clearTransactions('all');
+    setCashActionLoading(false);
+    setSyncMessage(`✓ Buku kas MB${activeAngkatan} berhasil direset dan direkap ulang bersih dari data ${members.length} siswa!`);
+    setTimeout(() => setSyncMessage(''), 6000);
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,6 +215,55 @@ export default function PengaturanPage() {
       {savedToast && (
         <div className="p-3.5 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold">
           ✓ Pengaturan berhasil disimpan!
+        </div>
+      )}
+
+      {/* Panel Pengelolaan Cache & Buku Kas Angkatan */}
+      {canEdit && (
+        <div className="p-5 rounded-2xl bg-surface-container-lowest border border-outline-variant/40 shadow-xs flex flex-col gap-3">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-extrabold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-lg">account_balance_wallet</span>
+                Kelola Transaksi &amp; Sinkronisasi Kas MB{activeAngkatan}
+              </h2>
+              <p className="text-xs text-on-surface-variant mt-1">
+                Gunakan opsi ini jika Anda baru saja memperbarui database ({members.length} siswa) dan ingin memastikan rekap iuran dan pengeluaran kas lama bersih serta akurat.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={cashActionLoading}
+                onClick={handleRecalculateRecaps}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs cursor-pointer shadow-xs transition flex items-center gap-1.5"
+              >
+                <span className={`material-symbols-outlined text-sm ${cashActionLoading ? 'animate-spin' : ''}`}>sync</span>
+                {cashActionLoading ? 'Memproses...' : `Hitung Ulang Rekap (${members.length} Siswa)`}
+              </button>
+
+              <button
+                type="button"
+                disabled={cashActionLoading}
+                onClick={handleClearExpenses}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs cursor-pointer shadow-xs transition flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-sm">delete_sweep</span>
+                Hapus Semua Pengeluaran Lama
+              </button>
+
+              <button
+                type="button"
+                disabled={cashActionLoading}
+                onClick={handleResetCashbook}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs cursor-pointer shadow-xs transition flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-sm">restart_alt</span>
+                Reset Kas &amp; Rekap Ulang
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

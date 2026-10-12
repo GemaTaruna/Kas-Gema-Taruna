@@ -497,7 +497,7 @@ export default function AnggotaPage() {
                 PANDUAN SECTION GEMA TARUNA:
               </p>
               <p><strong>BRASS:</strong> TEROMPET, BARITON</p>
-              <p><strong>PERCUSSION:</strong> BASS DRUM, SNARE DRUM, TENOR, SIMBAL</p>
+              <p><strong>PERCUSSION:</strong> BASS DRUM, SNARE DRUM, TENOR, SIMBAL, QUARTO</p>
               <p><strong>PIT INSTRUMENT:</strong> BELIRA</p>
               <p><strong>COLOR GUARD:</strong> BENDERA</p>
               <p><strong>LEADERSHIP:</strong> FIELD COMMANDER, STICKMASTER TARUNA, STICKMASTER TARUNI</p>
@@ -629,7 +629,7 @@ export default function AnggotaPage() {
                 PANDUAN SECTION GEMA TARUNA:
               </p>
               <p><strong>BRASS:</strong> TEROMPET, BARITON</p>
-              <p><strong>PERCUSSION:</strong> BASS DRUM, SNARE DRUM, TENOR, SIMBAL</p>
+              <p><strong>PERCUSSION:</strong> BASS DRUM, SNARE DRUM, TENOR, SIMBAL, QUARTO</p>
               <p><strong>PIT INSTRUMENT:</strong> BELIRA</p>
               <p><strong>COLOR GUARD:</strong> BENDERA</p>
               <p><strong>LEADERSHIP:</strong> FIELD COMMANDER, STICKMASTER TARUNA, STICKMASTER TARUNI</p>

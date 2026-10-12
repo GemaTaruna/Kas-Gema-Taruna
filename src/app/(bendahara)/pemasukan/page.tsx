@@ -8,13 +8,18 @@ export default function PemasukanPage() {
   const {
     activeAngkatan,
     canEdit,
+    members,
     transactions,
     totalPemasukan,
     saldoAkhir,
     addTransaction,
     deleteTransaction,
     updateTransaction,
+    recalculateAllRecapTransactions,
   } = useAngkatan();
+
+  const [toastMsg, setToastMsg] = useState('');
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
   const [category, setCategory] = useState('Iuran Anggota');
   const [amount, setAmount] = useState('');
@@ -24,6 +29,14 @@ export default function PemasukanPage() {
   const [transactionDate, setTransactionDate] = useState(() =>
     new Date().toISOString().slice(0, 10)
   );
+
+  const handleRecalculate = async () => {
+    setIsRecalculating(true);
+    await recalculateAllRecapTransactions();
+    setIsRecalculating(false);
+    setToastMsg(`Rekap iuran berhasil disinkronkan ulang dengan ${members.length} anggota MB${activeAngkatan}!`);
+    setTimeout(() => setToastMsg(''), 6000);
+  };
 
   // State Edit Pemasukan
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -91,17 +104,40 @@ export default function PemasukanPage() {
 
   return (
     <div className="p-4 sm:p-6 flex flex-col gap-6 max-w-[1440px] mx-auto w-full">
-      <div>
-        <span className="text-xs font-bold uppercase tracking-wider text-secondary">
-          BUKU KAS MASUK (BKM)
-        </span>
-        <h1 className="text-xl sm:text-2xl font-extrabold text-on-surface">
-          Pemasukan Kas — Angkatan {activeAngkatan} (MB{activeAngkatan})
-        </h1>
-        <p className="text-xs sm:text-sm text-on-surface-variant">
-          Pencatatan seluruh dana masuk khusus untuk Buku Kas Angkatan {activeAngkatan}.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <span className="text-xs font-bold uppercase tracking-wider text-secondary">
+            BUKU KAS MASUK (BKM)
+          </span>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-on-surface">
+            Pemasukan Kas — Angkatan {activeAngkatan} (MB{activeAngkatan})
+          </h1>
+          <p className="text-xs sm:text-sm text-on-surface-variant">
+            Pencatatan seluruh dana masuk khusus untuk Buku Kas Angkatan {activeAngkatan}.
+          </p>
+        </div>
+
+        {canEdit && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleRecalculate}
+              disabled={isRecalculating}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs cursor-pointer shadow-xs transition flex items-center gap-1.5"
+            >
+              <span className={`material-symbols-outlined text-sm ${isRecalculating ? 'animate-spin' : ''}`}>sync</span>
+              {isRecalculating ? 'Menghitung...' : `Hitung Ulang Rekap Iuran (${members.length} Siswa)`}
+            </button>
+          </div>
+        )}
       </div>
+
+      {toastMsg && (
+        <div className="p-3.5 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between">
+          <span>✓ {toastMsg}</span>
+          <button type="button" onClick={() => setToastMsg('')} className="text-emerald-700 hover:text-emerald-900 font-extrabold cursor-pointer">✕</button>
+        </div>
+      )}
 
       {/* Ringkasan Pemasukan */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
