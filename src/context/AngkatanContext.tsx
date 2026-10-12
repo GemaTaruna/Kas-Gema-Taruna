@@ -1291,7 +1291,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         paid_at: initialPaidAt,
         dues_amount: item.duesAmount,
       }));
-      await (supabase as any).from('kgt_members').insert(dbPayload);
+      await (supabase as any).from('kgt_members').upsert(dbPayload);
     } catch {
       // Saved in localStorage
     }
