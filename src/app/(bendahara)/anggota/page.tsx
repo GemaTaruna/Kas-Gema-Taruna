@@ -17,6 +17,7 @@ export default function AnggotaPage() {
     addMember,
     importMembersBulk,
     deleteMember,
+    updateMember,
     deleteAllMembers,
   } = useAngkatan();
 
@@ -32,12 +33,64 @@ export default function AnggotaPage() {
   const [instrument, setInstrument] = useState<string>('Terompet');
   const [phone, setPhone] = useState('');
 
+  // Form edit anggota
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [editMemberCode, setEditMemberCode] = useState('');
+  const [editFullName, setEditFullName] = useState('');
+  const [editKelas, setEditKelas] = useState('');
+  const [editSection, setEditSection] = useState<string>('BRASS');
+  const [editInstrument, setEditInstrument] = useState<string>('Terompet');
+  const [editPhone, setEditPhone] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleSectionChange = (newSec: string) => {
     setSection(newSec);
     const firstInstrument = SECTION_OPTIONS[newSec]?.[0] || '';
     setInstrument(firstInstrument);
+  };
+
+  const handleOpenEditModal = (m: (typeof members)[0]) => {
+    setEditingMemberId(m.id);
+    setEditMemberCode(m.memberCode);
+    setEditFullName(m.fullName);
+    setEditKelas(m.kelas === '-' ? '' : m.kelas);
+
+    const validSection = SECTION_NAMES.includes(m.section as any) ? m.section : 'BRASS';
+    setEditSection(validSection);
+
+    const instruments = SECTION_OPTIONS[validSection] || [];
+    if (instruments.includes(m.instrument)) {
+      setEditInstrument(m.instrument);
+    } else {
+      setEditInstrument(instruments[0] || m.instrument);
+    }
+
+    setEditPhone(m.phone === '-' ? '' : m.phone);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSectionChange = (newSec: string) => {
+    setEditSection(newSec);
+    const firstInstrument = SECTION_OPTIONS[newSec]?.[0] || '';
+    setEditInstrument(firstInstrument);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMemberId || !editFullName.trim()) return;
+
+    await updateMember(editingMemberId, {
+      fullName: editFullName.trim(),
+      kelas: editKelas.trim() || '-',
+      section: editSection,
+      instrument: editInstrument.trim() || '-',
+      phone: editPhone.trim() || '-',
+    });
+
+    setIsEditModalOpen(false);
+    setEditingMemberId(null);
   };
 
   const filteredMembers = members.filter((m) => {
@@ -338,13 +391,22 @@ export default function AnggotaPage() {
                     </div>
 
                     {canEdit && (
-                      <button
-                        type="button"
-                        onClick={() => deleteMember(m.id)}
-                        className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs shrink-0 cursor-pointer"
-                      >
-                        Hapus
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditModal(m)}
+                          className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold text-xs cursor-pointer"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteMember(m.id)}
+                          className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs cursor-pointer"
+                        >
+                          Hapus
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -390,13 +452,23 @@ export default function AnggotaPage() {
                       </td>
                       {canEdit && (
                         <td className="py-3 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => deleteMember(m.id)}
-                            className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
-                          >
-                            Hapus
-                          </button>
+                          <div className="inline-flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(m)}
+                              className="text-amber-600 hover:text-amber-800 font-bold text-xs cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                            <span className="text-outline-variant/60">•</span>
+                            <button
+                              type="button"
+                              onClick={() => deleteMember(m.id)}
+                              className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
+                            >
+                              Hapus
+                            </button>
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -522,6 +594,138 @@ export default function AnggotaPage() {
                   className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer"
                 >
                   Simpan Siswa
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Edit Anggota */}
+      {isEditModalOpen && canEdit && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white text-slate-900 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl my-auto">
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900">
+                  Edit Data Siswa — {editMemberCode}
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Ubah data siswa jika ada salah ketik nama, kelas, alat, atau nomor WhatsApp.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer px-1.5 py-0.5 rounded-lg hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Kotak Panduan Section Gema Taruna */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 my-4 text-[11px] text-slate-700 space-y-1">
+              <p className="font-extrabold text-slate-900 uppercase tracking-wider">
+                PANDUAN SECTION GEMA TARUNA:
+              </p>
+              <p><strong>BRASS:</strong> TEROMPET, BARITON</p>
+              <p><strong>PERCUSSION:</strong> BASS DRUM, SNARE DRUM, TENOR, SIMBAL</p>
+              <p><strong>PIT INSTRUMENT:</strong> BELIRA</p>
+              <p><strong>COLOR GUARD:</strong> BENDERA</p>
+              <p><strong>LEADERSHIP:</strong> FIELD COMMANDER, STICKMASTER TARUNA, STICKMASTER TARUNI</p>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-3 text-sm">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nama Lengkap Siswa
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                  placeholder="Masukkan nama lengkap siswa"
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Kelas
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editKelas}
+                  onChange={(e) => setEditKelas(e.target.value)}
+                  placeholder="Contoh: X-1 / XI-2"
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Seksi (Section)
+                  </label>
+                  <select
+                    value={editSection}
+                    onChange={(e) => handleEditSectionChange(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    {SECTION_NAMES.map((sec) => (
+                      <option key={sec} value={sec}>
+                        {sec}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Alat / Instrumen
+                  </label>
+                  <select
+                    value={editInstrument}
+                    onChange={(e) => setEditInstrument(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    {(SECTION_OPTIONS[editSection] || []).map((alat) => (
+                      <option key={alat} value={alat}>
+                        {alat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  No. WhatsApp Siswa
+                </label>
+                <input
+                  type="text"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="Contoh: 081234567890"
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold cursor-pointer hover:bg-slate-200 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold cursor-pointer transition shadow-sm"
+                >
+                  Simpan Perubahan
                 </button>
               </div>
             </form>

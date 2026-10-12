@@ -380,6 +380,16 @@ interface AngkatanContextValue {
     }>
   ) => Promise<number>;
   deleteMember: (id: string) => Promise<void>;
+  updateMember: (
+    id: string,
+    data: {
+      fullName: string;
+      kelas: string;
+      section: string;
+      instrument: string;
+      phone: string;
+    }
+  ) => Promise<void>;
   deleteAllMembers: () => Promise<void>;
   toggleSessionDues: (
     memberId: string,
@@ -1241,6 +1251,54 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateMember = async (
+    id: string,
+    data: {
+      fullName: string;
+      kelas: string;
+      section: string;
+      instrument: string;
+      phone: string;
+    }
+  ) => {
+    if (!canEdit) return;
+    setMembersByAngkatan((prev) => {
+      const updatedList = (prev[activeAngkatan] || []).map((m) => {
+        if (m.id !== id) return m;
+        return {
+          ...m,
+          fullName: data.fullName.trim(),
+          kelas: data.kelas.trim() || '-',
+          section: data.section,
+          instrument: data.instrument.trim() || '-',
+          phone: data.phone.trim() || '-',
+        };
+      });
+      const updated = {
+        ...prev,
+        [activeAngkatan]: updatedList,
+      };
+      localStorage.setItem('kgt_real_members_v4', JSON.stringify(updated));
+      return updated;
+    });
+
+    try {
+      const supabase = createClient();
+      await (supabase as any)
+        .from('kgt_members')
+        .update({
+          full_name: data.fullName.trim(),
+          status: encodeStatusField(data.kelas.trim() || '-', 'Aktif'),
+          section: data.section,
+          instrument: data.instrument.trim() || '-',
+          phone: data.phone.trim() || '-',
+        })
+        .eq('id', id);
+    } catch {
+      // Updated in localStorage
+    }
+  };
+
   const deleteAllMembers = async () => {
     if (!canEdit) return;
     setMembersByAngkatan((prev) => {
@@ -1765,6 +1823,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         addMember,
         importMembersBulk,
         deleteMember,
+        updateMember,
         deleteAllMembers,
         toggleSessionDues,
         payMultipleSessionsDues,
