@@ -1328,6 +1328,11 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     document.cookie = `kgt_session_display=${encodeURIComponent(matched.displayName)}; path=/; max-age=2592000; SameSite=Lax`;
     document.cookie = `kgt_session_locked_angkatan=${matched.angkatan || ''}; path=/; max-age=2592000; SameSite=Lax`;
     document.cookie = `kgt_active_angkatan=${targetAngkatan}; path=/; max-age=2592000; SameSite=Lax`;
+    try {
+      localStorage.setItem('kgt_last_activity', String(Date.now()));
+    } catch {
+      // ignore
+    }
 
     return { ok: true, account: matched };
   };
@@ -1345,6 +1350,11 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     document.cookie = `kgt_session_display=${encodeURIComponent(disp)}; path=/; max-age=2592000; SameSite=Lax`;
     document.cookie = `kgt_session_locked_angkatan=${angkatan}; path=/; max-age=2592000; SameSite=Lax`;
     document.cookie = `kgt_active_angkatan=${angkatan}; path=/; max-age=2592000; SameSite=Lax`;
+    try {
+      localStorage.setItem('kgt_last_activity', String(Date.now()));
+    } catch {
+      // ignore
+    }
   };
 
   const logout = () => {
@@ -1353,7 +1363,75 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     document.cookie = 'kgt_session_display=; path=/; max-age=0';
     document.cookie = 'kgt_session_locked_angkatan=; path=/; max-age=0';
     document.cookie = 'kgt_active_angkatan=; path=/; max-age=0';
+    try {
+      localStorage.removeItem('kgt_last_activity');
+    } catch {
+      // ignore
+    }
   };
+
+  // Otomatis Logout setelah 10 menit tidak ada aktivitas (Idle Timeout)
+  useEffect(() => {
+    const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 Menit
+    let lastWrite = 0;
+
+    const checkIdleAndLogout = () => {
+      if (typeof window === 'undefined') return;
+      if (window.location.pathname.startsWith('/login')) return;
+      const hasSession = getCookieValue('kgt_session_role');
+      if (!hasSession) return;
+
+      try {
+        const rawLast = localStorage.getItem('kgt_last_activity');
+        const lastActive = rawLast ? Number(rawLast) : 0;
+        if (!lastActive) {
+          localStorage.setItem('kgt_last_activity', String(Date.now()));
+          return;
+        }
+        if (Date.now() - lastActive >= IDLE_TIMEOUT_MS) {
+          logout();
+          window.location.href = '/login?timeout=1';
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    const recordActivity = () => {
+      if (typeof window === 'undefined') return;
+      if (window.location.pathname.startsWith('/login')) return;
+      const now = Date.now();
+      if (now - lastWrite < 2000) return;
+      lastWrite = now;
+      try {
+        localStorage.setItem('kgt_last_activity', String(now));
+      } catch {
+        // ignore
+      }
+    };
+
+    checkIdleAndLogout();
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    events.forEach((ev) => window.addEventListener(ev, recordActivity, { passive: true }));
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkIdleAndLogout();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', checkIdleAndLogout);
+
+    const intervalId = setInterval(checkIdleAndLogout, 10000);
+
+    return () => {
+      events.forEach((ev) => window.removeEventListener(ev, recordActivity));
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', checkIdleAndLogout);
+      clearInterval(intervalId);
+    };
+  }, []);
 
   const rawMembers = membersByAngkatan[activeAngkatan] || [];
 

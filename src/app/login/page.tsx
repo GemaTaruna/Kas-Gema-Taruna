@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ANGKATAN_LIST, AngkatanId, useAngkatan } from '@/context/AngkatanContext';
 
@@ -11,14 +11,22 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [selectedStudentAngkatan, setSelectedStudentAngkatan] = useState<AngkatanId>('16');
   const [errorMsg, setErrorMsg] = useState('');
+  const [idleLogoutNotice, setIdleLogoutNotice] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
   const { loginWithCredentials, enterStudentMode } = useAngkatan();
 
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('timeout=1')) {
+      setIdleLogoutNotice(true);
+    }
+  }, []);
+
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setIdleLogoutNotice(false);
     setLoading(true);
 
     const res = loginWithCredentials(identifier, password);
@@ -42,15 +50,16 @@ export default function LoginPage() {
 
   return (
     <main className="flex-grow flex items-center justify-center p-0 lg:p-6 sm:p-4 min-h-screen bg-slate-50 text-slate-800 font-sans antialiased selection:bg-amber-400 selection:text-slate-900">
-      <div className="w-full max-w-6xl bg-white shadow-2xl rounded-none lg:rounded-3xl overflow-hidden border border-slate-200/80 flex flex-col lg:flex-row min-h-[660px]">
-        {/* Left Brand Showcase */}
-        <section className="lg:w-5/12 bg-gradient-to-br from-slate-950 via-slate-900 to-[#0B1120] text-white p-6 sm:p-8 lg:p-12 relative flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-800 overflow-hidden">
+      <div className="w-full max-w-6xl bg-white shadow-2xl rounded-none lg:rounded-3xl overflow-hidden border border-slate-200/80 flex flex-col lg:flex-row min-h-screen lg:min-h-[660px]">
+        {/* Left Brand Showcase — Hanya tampil di Desktop / Web App (lg ke atas) */}
+        <section className="hidden lg:flex lg:w-5/12 bg-gradient-to-br from-slate-950 via-slate-900 to-[#0B1120] text-white p-10 xl:p-12 relative flex-col justify-between border-r border-slate-800 overflow-hidden">
           <div className="absolute -top-24 -left-24 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
           <div className="absolute bottom-10 right-0 w-80 h-80 bg-rose-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
-          <div className="relative z-10">
-            <div className="inline-block transition-transform hover:scale-105 duration-300 mb-5">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-slate-800/90 border border-amber-500/30 rounded-2xl p-2 flex items-center justify-center shadow-2xl drop-shadow-[0_10px_15px_rgba(245,158,11,0.25)]">
+          {/* Center Hero Showcase: Logo & Tulisan Diperbesar dan Seimbang */}
+          <div className="relative z-10 my-auto flex flex-col items-center text-center py-6">
+            <div className="inline-block transition-transform hover:scale-105 duration-300 mb-7">
+              <div className="w-36 h-36 xl:w-44 xl:h-44 bg-slate-800/90 border-2 border-amber-500/40 rounded-3xl p-4 flex items-center justify-center shadow-2xl drop-shadow-[0_15px_30px_rgba(245,158,11,0.3)]">
                 <img
                   src="/logo.png"
                   alt="Logo Marching Band Gema Taruna"
@@ -59,39 +68,18 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white mb-2 leading-tight">
+            <h1 className="text-3xl xl:text-4xl font-black tracking-tight text-white mb-3 leading-tight">
               KAS GEMA TARUNA
             </h1>
 
-            <p className="text-amber-400 text-sm sm:text-base lg:text-lg font-bold tracking-wide mb-6">
+            <div className="w-24 h-1.5 bg-gradient-to-r from-amber-500 via-amber-300 to-amber-500 rounded-full mb-4"></div>
+
+            <p className="text-amber-400 text-lg xl:text-xl font-extrabold tracking-wide leading-relaxed max-w-sm">
               Satu Tekad, Satu Semangat, Marching Hebat!
             </p>
-
-            <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/70 rounded-2xl p-4 sm:p-5 shadow-inner mb-6">
-              <div className="flex items-center justify-between border-b border-slate-700/60 pb-3 mb-3">
-                <span className="text-xs uppercase tracking-wider font-semibold text-slate-400">
-                  Pembukuan Mandiri Per Angkatan
-                </span>
-                <span className="inline-flex items-center text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                  ● Aktif
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                {ANGKATAN_LIST.map((angk) => (
-                  <div
-                    key={angk}
-                    className="bg-slate-900/70 border border-slate-700/80 rounded-xl py-2 px-2"
-                  >
-                    <p className="text-xs font-extrabold text-amber-400">
-                      Angkatan {angk}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
 
-          <div className="relative z-10 pt-4 border-t border-slate-700/50">
+          <div className="relative z-10 pt-5 border-t border-slate-700/50">
             <div className="flex items-start gap-3">
               <img
                 src="/logo.png"
@@ -110,11 +98,39 @@ export default function LoginPage() {
           </div>
         </section>
 
-        {/* Right Form Panel */}
-        <section className="lg:w-7/12 p-6 sm:p-8 lg:p-14 bg-white flex flex-col justify-center relative">
+        {/* Right Form Panel — Langsung tampil di Mobile dengan Logo yang disesuaikan */}
+        <section className="w-full lg:w-7/12 p-6 sm:p-8 lg:p-14 bg-white flex flex-col justify-center relative my-auto">
           <div className="max-w-md w-full mx-auto">
-            <div className="mb-6 text-center sm:text-left">
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mb-1.5">
+            {/* Header Logo Khusus Mobile */}
+            <div className="lg:hidden flex flex-col items-center text-center mb-6 pt-2">
+              <div className="w-24 h-24 bg-slate-900 border-2 border-amber-500/40 rounded-3xl p-2.5 flex items-center justify-center shadow-xl drop-shadow-[0_8px_20px_rgba(15,23,42,0.25)] mb-3.5">
+                <img
+                  src="/logo.png"
+                  alt="Logo Marching Band Gema Taruna"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900 leading-tight">
+                KAS GEMA TARUNA
+              </h1>
+              <p className="text-xs font-extrabold text-amber-600 tracking-wide mt-1">
+                Satu Tekad, Satu Semangat, Marching Hebat!
+              </p>
+              <div className="w-16 h-1 bg-amber-400 rounded-full mt-3"></div>
+            </div>
+
+            {idleLogoutNotice && (
+              <div className="mb-5 p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-xs font-semibold text-amber-900 flex items-start gap-2.5">
+                <span className="text-base leading-none">🔒</span>
+                <div>
+                  <strong className="block text-amber-950 mb-0.5">Sesi Berakhir Otomatis (10 Menit)</strong>
+                  Demi keamanan, akun dikeluarkan otomatis karena tidak ada aktivitas selama 10 menit. Silakan masuk kembali.
+                </div>
+              </div>
+            )}
+
+            <div className="mb-6 text-center lg:text-left">
+              <h2 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight mb-1">
                 Portal Akses Kas Gema Taruna
               </h2>
               <p className="text-slate-500 text-xs sm:text-sm">
@@ -231,7 +247,7 @@ export default function LoginPage() {
                 </button>
               </div>
             ) : (
-              /* TAB 2 & 3: LOGIN ADMIN ANGKATAN ATAU SUPER ADMIN TANPA CONTOH AKUN */
+              /* TAB 2 & 3: LOGIN ADMIN ANGKATAN ATAU SUPER ADMIN */
               <form onSubmit={handleAdminLogin} className="space-y-4">
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
                   {activeTab === 'superadmin' ? (
