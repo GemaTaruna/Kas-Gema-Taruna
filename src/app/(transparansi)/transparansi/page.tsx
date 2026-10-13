@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ANGKATAN_LIST,
   formatMonthLabel,
   INDONESIAN_MONTHS,
   SECTION_NAMES,
@@ -17,7 +16,6 @@ export default function TransparansiSiswaPage() {
   const router = useRouter();
   const {
     activeAngkatan,
-    setActiveAngkatan,
     activeMonth,
     setActiveMonth,
     monthlySessionCount,
@@ -102,30 +100,16 @@ export default function TransparansiSiswaPage() {
           </button>
         </div>
 
-        {/* Bar Pemilih Angkatan (16 s.d. 21) */}
+        {/* Bar Info Angkatan Terkunci & Filter Tampilan */}
         <div className="bg-slate-900/90 border-t border-white/10">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+            <div className="flex items-center gap-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 mr-1 shrink-0">
                 Angkatan:
               </span>
-              {ANGKATAN_LIST.map((angk) => {
-                const active = activeAngkatan === angk;
-                return (
-                  <button
-                    key={angk}
-                    type="button"
-                    onClick={() => setActiveAngkatan(angk)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition shrink-0 cursor-pointer ${
-                      active
-                        ? 'bg-amber-500 text-slate-950 shadow'
-                        : 'bg-white/10 text-slate-300 hover:bg-white/20'
-                    }`}
-                  >
-                    MB{angk}
-                  </button>
-                );
-              })}
+              <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-amber-500 text-slate-950 shadow shrink-0">
+                MB{activeAngkatan}
+              </span>
             </div>
 
             <div className="flex items-center gap-1 text-xs">

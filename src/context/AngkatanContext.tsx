@@ -706,7 +706,10 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     const savedUser = getCookieValue('kgt_session_user') || 'Gema Taruna';
     const savedDisplay = getCookieValue('kgt_session_display') || 'Super Admin (Pembina)';
     const savedLocked = getCookieValue('kgt_session_locked_angkatan') as AngkatanId | null;
-    const savedActive = (getCookieValue('kgt_active_angkatan') as AngkatanId) || savedLocked || '16';
+    const savedActive =
+      (savedRole !== 'superadmin' && savedLocked && ANGKATAN_LIST.includes(savedLocked))
+        ? savedLocked
+        : ((getCookieValue('kgt_active_angkatan') as AngkatanId) || savedLocked || '16');
 
     setRole(savedRole);
     setUsername(savedUser);
@@ -1296,7 +1299,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setActiveAngkatan = (a: AngkatanId) => {
-    if (role === 'admin_angkatan' && lockedAngkatan && a !== lockedAngkatan) {
+    if ((role === 'admin_angkatan' || role === 'siswa') && lockedAngkatan && a !== lockedAngkatan) {
       return;
     }
     setActiveAngkatanState(a);
