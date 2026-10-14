@@ -35,6 +35,8 @@ export default function TransparansiSiswaPage() {
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [activeView, setActiveView] = useState<'iuran' | 'mutasi'>('iuran');
   const [mutasiFilter, setMutasiFilter] = useState<'all' | 'pemasukan' | 'pengeluaran'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(20);
 
   const [selectedYear, selectedMonthNum] = (activeMonth || '2026-10').split('-');
 
@@ -59,6 +61,18 @@ export default function TransparansiSiswaPage() {
       sectionFilter === 'ALL' || m.section.toUpperCase() === sectionFilter;
     return matchName && matchSec;
   });
+
+  // Reset pagination on filter or month change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchMember, sectionFilter, activeMonth]);
+
+  const totalItems = filteredMembers.length;
+  const totalPages = pageSize === -1 ? 1 : Math.ceil(totalItems / pageSize) || 1;
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safeCurrentPage - 1) * (pageSize === -1 ? totalItems : pageSize);
+  const endIndex = pageSize === -1 ? totalItems : Math.min(startIndex + pageSize, totalItems);
+  const displayedMembers = pageSize === -1 ? filteredMembers : filteredMembers.slice(startIndex, endIndex);
 
   const filteredTransactions = transactions.filter((t) => {
     if (mutasiFilter === 'pemasukan') return t.type === 'pemasukan';
@@ -90,7 +104,7 @@ export default function TransparansiSiswaPage() {
     <div className="min-h-screen bg-slate-50/70 text-slate-800 flex flex-col font-sans">
       {/* Header Responsif Web PC & Mobile */}
       <header className="sticky top-0 z-40 bg-[#101726] text-white border-b border-amber-500/30 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-3">
+        <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <img
               src="/logo.png"
@@ -124,7 +138,7 @@ export default function TransparansiSiswaPage() {
 
         {/* Sub-bar: Info Angkatan & Navigasi Tab (HANYA Iuran & Mutasi) */}
         <div className="bg-[#0b101b] border-t border-white/10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
+          <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-amber-400 shrink-0">
                 Unit Angkatan:
@@ -185,7 +199,7 @@ export default function TransparansiSiswaPage() {
       </header>
 
       {/* Konten Utama */}
-      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6 flex-1">
+      <main className="max-w-7xl 2xl:max-w-[1440px] mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6 flex-1">
         {/* 4 Kartu Ringkasan Eksekutif Kas (Berdampak Visual Tinggi / Greget) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Saldo Kas */}
@@ -410,16 +424,17 @@ export default function TransparansiSiswaPage() {
               <>
                 {/* Tampilan Mobile: Kartu Siswa Rapi */}
                 <div className="md:hidden divide-y divide-slate-100">
-                  {filteredMembers.map((m, idx) => {
+                  {displayedMembers.map((m, idx) => {
                     const paidCount = (m.paidSessions || []).length;
                     const arrearsList = m.arrears || [];
+                    const rowNumber = startIndex + idx + 1;
                     return (
                       <div key={m.id} className="p-4 space-y-2.5 hover:bg-slate-50/60 transition-colors">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs font-mono font-bold text-slate-400">
-                                #{idx + 1}
+                                #{rowNumber}
                               </span>
                               <span className="text-sm font-black text-slate-900">
                                 {m.fullName}
@@ -441,14 +456,14 @@ export default function TransparansiSiswaPage() {
                           </span>
                         </div>
 
-                        {/* Badges Pertemuan */}
-                        <div className="flex flex-wrap gap-1.5">
+                        {/* Badges Pertemuan (Satu baris horizontal tidak turun ke bawah) */}
+                        <div className="flex items-center flex-nowrap gap-1.5 overflow-x-auto pb-1">
                           {sessions.map((ses) => {
                             const paid = (m.paidSessions || []).includes(ses.id);
                             return (
                               <span
                                 key={ses.id}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-black transition-colors ${
+                                className={`px-2.5 py-1 rounded-lg text-xs font-black shrink-0 transition-colors ${
                                   paid
                                     ? 'bg-emerald-600 text-white shadow-2xs'
                                     : 'bg-slate-100 text-slate-400 border border-slate-200'
@@ -475,22 +490,23 @@ export default function TransparansiSiswaPage() {
                 {/* Tampilan Desktop PC: Tabel Elegan, Jelas, & Nyaman Dibaca */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left text-sm border-collapse">
-                    <thead className="bg-slate-100/80 text-slate-600 uppercase text-xs font-black tracking-wider border-b border-slate-200">
+                    <thead className="bg-slate-100/90 text-slate-700 uppercase text-xs font-black tracking-wider border-b border-slate-200">
                       <tr>
-                        <th className="py-3.5 px-4 text-center w-14">No</th>
-                        <th className="py-3.5 px-5">Nama Siswa & Kelas</th>
-                        <th className="py-3.5 px-5">Seksi & Alat</th>
-                        <th className="py-3.5 px-5 text-center">
+                        <th className="py-3.5 px-4 text-center w-14 shrink-0">No</th>
+                        <th className="py-3.5 px-5 w-[26%] min-w-[200px]">Nama Siswa & Kelas</th>
+                        <th className="py-3.5 px-5 w-[18%] min-w-[150px]">Seksi & Alat</th>
+                        <th className="py-3.5 px-5 text-center w-[38%] min-w-[320px]">
                           Status Pertemuan ({formatMonthLabel(activeMonth)})
                         </th>
-                        <th className="py-3.5 px-5 text-right w-44">Total Terbayar</th>
+                        <th className="py-3.5 px-5 text-right w-[18%] min-w-[150px]">Total Terbayar</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredMembers.map((m, idx) => {
+                      {displayedMembers.map((m, idx) => {
                         const paidCount = (m.paidSessions || []).length;
                         const arrearsList = m.arrears || [];
                         const isEven = idx % 2 === 0;
+                        const rowNumber = startIndex + idx + 1;
                         return (
                           <tr
                             key={m.id}
@@ -499,7 +515,7 @@ export default function TransparansiSiswaPage() {
                             }`}
                           >
                             <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-400 text-xs">
-                              {idx + 1}
+                              {rowNumber}
                             </td>
                             <td className="py-3.5 px-5">
                               <div className="flex items-center gap-2">
@@ -526,14 +542,15 @@ export default function TransparansiSiswaPage() {
                                 {m.instrument}
                               </span>
                             </td>
-                            <td className="py-3.5 px-5">
-                              <div className="flex items-center justify-center flex-wrap gap-1.5">
+                            <td className="py-3.5 px-5 text-center">
+                              {/* Satu baris penuh (flex-nowrap) sehingga P1-P5 tetap horizontal & proporsional */}
+                              <div className="flex items-center justify-center flex-nowrap gap-1.5 whitespace-nowrap overflow-x-auto py-0.5">
                                 {sessions.map((ses) => {
                                   const paid = (m.paidSessions || []).includes(ses.id);
                                   return (
                                     <span
                                       key={ses.id}
-                                      className={`px-3 py-1 rounded-lg text-xs font-black transition-all ${
+                                      className={`px-3 py-1 rounded-lg text-xs font-black shrink-0 transition-all ${
                                         paid
                                           ? 'bg-emerald-600 text-white shadow-2xs'
                                           : 'bg-slate-100 text-slate-400 border border-slate-200'
@@ -566,6 +583,100 @@ export default function TransparansiSiswaPage() {
                       })}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Kontrol Paginasi Siswa (Desktop & Mobile) */}
+                <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-bold text-slate-600">
+                  <div className="flex items-center gap-3">
+                    <span>
+                      Menampilkan{' '}
+                      <span className="font-black text-slate-900">
+                        {totalItems === 0 ? 0 : startIndex + 1} - {endIndex}
+                      </span>{' '}
+                      dari <span className="font-black text-slate-900">{totalItems}</span> siswa
+                    </span>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-400">|</span>
+                      <label htmlFor="pageSizeSelect" className="text-slate-500 font-normal">
+                        Per hal:
+                      </label>
+                      <select
+                        id="pageSizeSelect"
+                        value={pageSize}
+                        onChange={(e) => {
+                          setPageSize(Number(e.target.value));
+                          setCurrentPage(1);
+                        }}
+                        className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs font-black text-slate-800 outline-none cursor-pointer focus:ring-1 focus:ring-amber-500"
+                      >
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                        <option value={-1}>Semua</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={safeCurrentPage <= 1}
+                        className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors flex items-center gap-1 text-xs font-black cursor-pointer shadow-2xs"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+                        <span>Sebelumnya</span>
+                      </button>
+
+                      <div className="flex items-center gap-1 px-1">
+                        {Array.from({ length: totalPages }).map((_, i) => {
+                          const pageNum = i + 1;
+                          if (
+                            totalPages > 7 &&
+                            Math.abs(pageNum - safeCurrentPage) > 2 &&
+                            pageNum !== 1 &&
+                            pageNum !== totalPages
+                          ) {
+                            if (Math.abs(pageNum - safeCurrentPage) === 3) {
+                              return (
+                                <span key={pageNum} className="text-slate-400 px-1">
+                                  ...
+                                </span>
+                              );
+                            }
+                            return null;
+                          }
+                          const isCurrent = pageNum === safeCurrentPage;
+                          return (
+                            <button
+                              key={pageNum}
+                              type="button"
+                              onClick={() => setCurrentPage(pageNum)}
+                              className={`w-7 h-7 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                                isCurrent
+                                  ? 'bg-slate-900 text-white shadow-xs'
+                                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={safeCurrentPage >= totalPages}
+                        className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors flex items-center gap-1 text-xs font-black cursor-pointer shadow-2xs"
+                      >
+                        <span>Berikutnya</span>
+                        <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}

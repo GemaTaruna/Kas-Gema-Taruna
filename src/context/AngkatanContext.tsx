@@ -1871,6 +1871,64 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
 
   const deleteTransaction = async (id: string) => {
     if (!canEdit) return;
+    const currentTx = txByAngkatan[activeAngkatan]?.find((t) => t.id === id);
+    const recapPrefix = `REKAP-MB${activeAngkatan}-`;
+
+    // Jika yang dihapus adalah transaksi Rekap Iuran, reset juga pembayaran siswa pada tanggal tersebut
+    if (currentTx && currentTx.referenceNo.startsWith(recapPrefix)) {
+      const datePart = currentTx.referenceNo.replace(recapPrefix, '');
+      const list = membersByAngkatan[activeAngkatan] || [];
+      const updatedMembersList = list.map((item) => {
+        const datesObj = { ...(item.paidSessionDates || {}) };
+        let changed = false;
+        const nextKeys = (item.allPaidKeys || []).filter((k) => {
+          if (datesObj[k] === datePart) {
+            delete datesObj[k];
+            changed = true;
+            return false;
+          }
+          return true;
+        });
+
+        if (!changed) return item;
+        return {
+          ...item,
+          allPaidKeys: nextKeys,
+          paidSessionDates: datesObj,
+          paidAt: encodePaidData(nextKeys, datesObj),
+          duesStatus: nextKeys.length > 0 ? 'LUNAS' : 'BELUM BAYAR',
+        };
+      });
+
+      setMembersByAngkatan((prev) => {
+        const updated = { ...prev, [activeAngkatan]: updatedMembersList };
+        try {
+          localStorage.setItem('kgt_real_members_v4', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      try {
+        const supabase = createClient();
+        const dbPayload = updatedMembersList.map((item) => ({
+          id: item.id,
+          angkatan: activeAngkatan,
+          member_code: item.memberCode,
+          full_name: item.fullName,
+          section: item.section,
+          instrument: item.instrument,
+          phone: item.phone,
+          status: encodeStatusField(item.kelas, item.status),
+          dues_status: (item.allPaidKeys || []).length > 0 ? 'LUNAS' : 'BELUM BAYAR',
+          paid_at: item.paidAt,
+          dues_amount: item.duesAmount || 10000,
+        }));
+        await (supabase as any).from('kgt_members').upsert(dbPayload);
+      } catch {
+        // ignore
+      }
+    }
+
     setTxByAngkatan((prev) => {
       const updated = {
         ...prev,

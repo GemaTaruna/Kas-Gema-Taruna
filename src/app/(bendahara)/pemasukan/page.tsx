@@ -82,6 +82,17 @@ export default function PemasukanPage() {
     setEditingTxId(null);
   };
 
+  const handleDeleteTransaction = async (t: (typeof transactions)[0]) => {
+    const isRecap = t.referenceNo.startsWith(`REKAP-MB${activeAngkatan}-`);
+    const promptMsg = isRecap
+      ? `Hapus bukti rekap ${t.referenceNo} (+${formatRupiah(t.amount)})?\n\nPERHATIAN: Seluruh ceklis pembayaran siswa pada tanggal ${t.transactionDate} juga akan otomatis dibatalkan/di-reset di menu Iuran.`
+      : `Yakin ingin menghapus transaksi pemasukan ${t.referenceNo} (+${formatRupiah(t.amount)})?`;
+
+    if (window.confirm(promptMsg)) {
+      await deleteTransaction(t.id);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const numeric = Number(amount.replace(/[^0-9]/g, ''));
@@ -347,7 +358,7 @@ export default function PemasukanPage() {
                               <span className="text-outline-variant/60">•</span>
                               <button
                                 type="button"
-                                onClick={() => deleteTransaction(t.id)}
+                                onClick={() => handleDeleteTransaction(t)}
                                 className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
                               >
                                 Hapus
@@ -392,7 +403,7 @@ export default function PemasukanPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => deleteTransaction(t.id)}
+                              onClick={() => handleDeleteTransaction(t)}
                               className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[11px] cursor-pointer"
                             >
                               Hapus
