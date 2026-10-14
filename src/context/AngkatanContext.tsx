@@ -273,6 +273,13 @@ export function ensureUUID(id?: string | null): string {
   return generateUUID();
 }
 
+export function getRecapTransactionId(angkatan: string, datePart: string): string {
+  const cleanDate = (datePart || '').replace(/[^0-9]/g, '').slice(0, 8);
+  const aPadded = (angkatan || '16').padStart(2, '0').slice(-2);
+  const datePadded = cleanDate.padStart(12, '0');
+  return `00000000-0000-4000-80${aPadded}-${datePadded}`;
+}
+
 // Helper untuk encode/decode kelas & paidSessions ke kolom Supabase yang sudah ada
 function encodeStatusField(kelas: string, status: string): string {
   return `${kelas || '-'}||${status || 'Aktif'}`;
@@ -504,8 +511,27 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     customDuesNominal?: number
   ) => {
     const angkatan = targetAngkatan || activeAngkatan;
-    const currentMemberList =
+    let currentMemberList =
       customMembersList || membersByAngkatan[angkatan] || [];
+
+    // Jika belum ada di memori dan tidak di-pass, coba ambil dari localStorage
+    if (currentMemberList.length === 0) {
+      try {
+        const localMemStr = localStorage.getItem('kgt_real_members_v4');
+        if (localMemStr) {
+          const parsed = JSON.parse(localMemStr);
+          if (parsed && Array.isArray(parsed[angkatan]) && parsed[angkatan].length > 0) {
+            currentMemberList = parsed[angkatan];
+          }
+        }
+      } catch {}
+    }
+
+    // Jika daftar anggota tetap kosong dan tidak dipanggil dari aksi eksplisit, jangan hapus rekap yang ada
+    if (currentMemberList.length === 0 && !customMembersList) {
+      return;
+    }
+
     const nominalToUse = customDuesNominal ?? duesNominal;
 
     const dateStatsMap: Record<
@@ -530,91 +556,100 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     });
 
     const recapPrefix = `REKAP-MB${angkatan}-`;
+    const recapsToUpsert: TransactionItem[] = [];
+    const deadRecapIds: string[] = [];
 
-    let deadRecapIds: string[] = [];
-    let recapsToUpsert: TransactionItem[] = [];
+    // Baca transaksi yang ada dari state atau localStorage
+    let existingTxList: TransactionItem[] = txByAngkatan[angkatan] || [];
+    if (existingTxList.length === 0) {
+      try {
+        const saved = localStorage.getItem('kgt_real_tx_v4');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && Array.isArray(parsed[angkatan])) {
+            existingTxList = parsed[angkatan];
+          }
+        }
+      } catch {}
+    }
 
+    const nonRecapTx = existingTxList.filter(
+      (t) => !t.referenceNo.startsWith(recapPrefix)
+    );
+    const existingRecaps = existingTxList.filter((t) =>
+      t.referenceNo.startsWith(recapPrefix)
+    );
+
+    const remainingStatsMap = { ...dateStatsMap };
+
+    existingRecaps.forEach((t) => {
+      const datePart = t.referenceNo.replace(recapPrefix, '');
+      const stats = remainingStatsMap[datePart];
+      if (!stats || stats.count === 0) {
+        deadRecapIds.push(t.id);
+      } else {
+        const totalRupiah = stats.count * nominalToUse;
+        const breakdownStr = Object.entries(stats.breakdown)
+          .map(([lbl, cnt]) => `${cnt}x ${lbl}`)
+          .join(', ');
+        const descriptionText = `Rekap Iuran Siswa (${stats.count} pembayaran: ${breakdownStr})`;
+        const vendorText = `${stats.students.size} Siswa MB${angkatan}`;
+
+        const item: TransactionItem = {
+          ...t,
+          id: t.id || getRecapTransactionId(angkatan, datePart),
+          description: descriptionText,
+          vendor: vendorText,
+          amount: totalRupiah,
+          recordedBy: username || 'Admin',
+          transactionDate: datePart,
+        };
+        recapsToUpsert.push(item);
+        delete remainingStatsMap[datePart];
+      }
+    });
+
+    Object.entries(remainingStatsMap).forEach(([datePart, stats]) => {
+      if (stats.count > 0) {
+        const totalRupiah = stats.count * nominalToUse;
+        const breakdownStr = Object.entries(stats.breakdown)
+          .map(([lbl, cnt]) => `${cnt}x ${lbl}`)
+          .join(', ');
+        const descriptionText = `Rekap Iuran Siswa (${stats.count} pembayaran: ${breakdownStr})`;
+        const vendorText = `${stats.students.size} Siswa MB${angkatan}`;
+
+        const item: TransactionItem = {
+          id: getRecapTransactionId(angkatan, datePart),
+          angkatan,
+          referenceNo: `${recapPrefix}${datePart}`,
+          type: 'pemasukan',
+          category: 'Iuran Anggota',
+          description: descriptionText,
+          vendor: vendorText,
+          amount: totalRupiah,
+          paymentMethod: 'Tunai Kas',
+          recordedBy: username || 'Admin',
+          transactionDate: datePart,
+        };
+        recapsToUpsert.push(item);
+      }
+    });
+
+    // 1. Update State & LocalStorage Segera (Synchronously)
     setTxByAngkatan((prev) => {
-      deadRecapIds = [];
-      recapsToUpsert = [];
-      const existingTxList = prev[angkatan] || [];
-      const nonRecapTx = existingTxList.filter(
-        (t) => !t.referenceNo.startsWith(recapPrefix)
-      );
-      const existingRecaps = existingTxList.filter((t) =>
-        t.referenceNo.startsWith(recapPrefix)
-      );
-
-      const updatedRecaps: TransactionItem[] = [];
-      const remainingStatsMap = { ...dateStatsMap };
-
-      existingRecaps.forEach((t) => {
-        const datePart = t.referenceNo.replace(recapPrefix, '');
-        const stats = remainingStatsMap[datePart];
-        if (!stats || stats.count === 0) {
-          deadRecapIds.push(t.id);
-        } else {
-          const totalRupiah = stats.count * nominalToUse;
-          const breakdownStr = Object.entries(stats.breakdown)
-            .map(([lbl, cnt]) => `${cnt}x ${lbl}`)
-            .join(', ');
-          const descriptionText = `Rekap Iuran Siswa (${stats.count} pembayaran: ${breakdownStr})`;
-          const vendorText = `${stats.students.size} Siswa MB${angkatan}`;
-
-          const item: TransactionItem = {
-            ...t,
-            description: descriptionText,
-            vendor: vendorText,
-            amount: totalRupiah,
-            recordedBy: username || 'Admin',
-            transactionDate: datePart,
-          };
-          updatedRecaps.push(item);
-          recapsToUpsert.push(item);
-          delete remainingStatsMap[datePart];
-        }
-      });
-
-      Object.entries(remainingStatsMap).forEach(([datePart, stats]) => {
-        if (stats.count > 0) {
-          const totalRupiah = stats.count * nominalToUse;
-          const breakdownStr = Object.entries(stats.breakdown)
-            .map(([lbl, cnt]) => `${cnt}x ${lbl}`)
-            .join(', ');
-          const descriptionText = `Rekap Iuran Siswa (${stats.count} pembayaran: ${breakdownStr})`;
-          const vendorText = `${stats.students.size} Siswa MB${angkatan}`;
-
-          const item: TransactionItem = {
-            id: generateUUID(),
-            angkatan,
-            referenceNo: `${recapPrefix}${datePart}`,
-            type: 'pemasukan',
-            category: 'Iuran Anggota',
-            description: descriptionText,
-            vendor: vendorText,
-            amount: totalRupiah,
-            paymentMethod: 'Tunai Kas',
-            recordedBy: username || 'Admin',
-            transactionDate: datePart,
-          };
-          updatedRecaps.push(item);
-          recapsToUpsert.push(item);
-        }
-      });
-
-      const finalTxList = [...updatedRecaps, ...nonRecapTx];
+      const currentList = prev[angkatan] || [];
+      const nonRecap = currentList.filter((t) => !t.referenceNo.startsWith(recapPrefix));
       const updated = {
         ...prev,
-        [angkatan]: finalTxList,
+        [angkatan]: [...recapsToUpsert, ...nonRecap],
       };
       try {
         localStorage.setItem('kgt_real_tx_v4', JSON.stringify(updated));
-      } catch {
-        // ignore
-      }
+      } catch {}
       return updated;
     });
 
+    // 2. Simpan ke Supabase Cloud (Wajib di-await agar tersimpan di Supabase remote)
     try {
       const supabase = createClient();
       if (deadRecapIds.length > 0) {
@@ -999,8 +1034,10 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
           (supabase as any).from('kgt_transactions').select('*').order('created_at', { ascending: false }),
         ]);
 
+        let foundNominal: number | null = null;
+        let groupedMembers: Record<AngkatanId, MemberItem[]> | null = null;
+
         if (dbMembers) {
-          let foundNominal: number | null = null;
           const loadedCounts: Record<AngkatanId, Record<string, number>> = {
             '16': {}, '17': {}, '18': {}, '19': {}, '20': {}, '21': {},
           };
@@ -1062,6 +1099,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
             try { localStorage.setItem('kgt_dues_nominal_v4', String(foundNominal)); } catch {}
           }
 
+          groupedMembers = grouped;
           setMembersByAngkatan(grouped);
           try { localStorage.setItem('kgt_real_members_v4', JSON.stringify(grouped)); } catch {}
 
@@ -1098,6 +1136,16 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
           }
           setTxByAngkatan(groupedTx);
           try { localStorage.setItem('kgt_real_tx_v4', JSON.stringify(groupedTx)); } catch {}
+
+          if (groupedMembers) {
+            for (const a of ANGKATAN_LIST) {
+              const hasRecap = (groupedTx[a] || []).some((t) => t.referenceNo.startsWith(`REKAP-MB${a}-`));
+              const hasPaid = ((groupedMembers[a] as MemberItem[]) || []).some((m: MemberItem) => (m.allPaidKeys || []).length > 0);
+              if (!hasRecap && hasPaid) {
+                await recalculateAllRecapTransactions(a, groupedMembers[a], foundNominal || duesNominal);
+              }
+            }
+          }
         }
       } catch {
         // network error / offline
