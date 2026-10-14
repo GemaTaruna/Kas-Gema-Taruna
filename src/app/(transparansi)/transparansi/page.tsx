@@ -432,24 +432,30 @@ export default function TransparansiSiswaPage() {
                       <div key={m.id} className="p-4 space-y-2.5 hover:bg-slate-50/60 transition-colors">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-mono font-bold text-slate-400">
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-xs font-mono font-bold text-slate-400 shrink-0">
                                 #{rowNumber}
                               </span>
-                              <span className="text-sm font-black text-slate-900">
+                              <span className="text-sm font-black text-slate-900 leading-snug">
                                 {m.fullName}
                               </span>
-                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
                                 {m.kelas || '-'}
                               </span>
+                              <span className="text-[10px] font-mono text-slate-400">
+                                {m.memberCode}
+                              </span>
                             </div>
-                            <p className="text-xs text-slate-500 mt-0.5">
-                              <span className={`inline-block px-1.5 py-0.2 rounded border text-[10px] font-bold ${getSectionBadge(m.section)}`}>
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                              <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-black ${getSectionBadge(m.section)}`}>
                                 {m.section}
                               </span>
-                              {' • '}
-                              {m.instrument}
-                            </p>
+                              <span className="text-xs font-bold text-slate-700">
+                                {m.instrument}
+                              </span>
+                            </div>
                           </div>
                           <span className="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-lg shrink-0">
                             {paidCount}/{monthlySessionCount} Lunas
@@ -518,29 +524,31 @@ export default function TransparansiSiswaPage() {
                               {rowNumber}
                             </td>
                             <td className="py-3.5 px-5">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm lg:text-base font-extrabold text-slate-900">
-                                  {m.fullName}
-                                </span>
-                                <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/70">
+                              <div className="text-sm lg:text-base font-black text-slate-900 leading-snug">
+                                {m.fullName}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/80 shrink-0">
                                   {m.kelas || '-'}
                                 </span>
+                                <span className="text-[11px] font-mono text-slate-400 font-semibold">
+                                  {m.memberCode}
+                                </span>
                               </div>
-                              <span className="text-[11px] font-mono text-slate-400">
-                                {m.memberCode}
-                              </span>
                             </td>
                             <td className="py-3.5 px-5">
-                              <span
-                                className={`inline-block px-2 py-0.5 rounded-md border text-xs font-bold mr-1.5 ${getSectionBadge(
-                                  m.section
-                                )}`}
-                              >
-                                {m.section}
-                              </span>
-                              <span className="text-xs font-medium text-slate-600">
+                              <div>
+                                <span
+                                  className={`inline-block px-2.5 py-0.5 rounded-md border text-xs font-black tracking-wide ${getSectionBadge(
+                                    m.section
+                                  )}`}
+                                >
+                                  {m.section}
+                                </span>
+                              </div>
+                              <p className="text-xs font-extrabold text-slate-700 mt-1 uppercase tracking-tight">
                                 {m.instrument}
-                              </span>
+                              </p>
                             </td>
                             <td className="py-3.5 px-5 text-center">
                               {/* Satu baris penuh (flex-nowrap) sehingga P1-P5 tetap horizontal & proporsional */}
