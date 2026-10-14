@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   formatMonthLabel,
   formatWhatsAppLink,
@@ -73,6 +73,20 @@ export default function PembayaranIuranPage() {
     const matchSection = sectionFilter === 'ALL' || m.section === sectionFilter;
     return matchSearch && matchStatus && matchSection;
   });
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(20);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, sectionFilter, activeMonth, activeAngkatan]);
+
+  const totalItems = filtered.length;
+  const totalPages = pageSize === -1 ? 1 : Math.ceil(totalItems / pageSize) || 1;
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safeCurrentPage - 1) * (pageSize === -1 ? totalItems : pageSize);
+  const endIndex = pageSize === -1 ? totalItems : Math.min(startIndex + pageSize, totalItems);
+  const displayed = pageSize === -1 ? filtered : filtered.slice(startIndex, endIndex);
 
   // Statistik Bulan Aktif
   const fullPaidCount = members.filter(
@@ -509,7 +523,7 @@ export default function PembayaranIuranPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/20">
-                  {filtered.map((m, idx) => {
+                  {displayed.map((m, idx) => {
                     const paidCount = m.paidSessions.length;
                     const isFullPaid = paidCount >= monthlySessionCount;
                     const arrearsList = m.arrears || [];
@@ -518,7 +532,7 @@ export default function PembayaranIuranPage() {
                     return (
                       <tr key={m.id} className="hover:bg-surface-container-low/50">
                         <td className="py-3 px-4 font-mono text-on-surface-variant">
-                          {idx + 1}
+                          {startIndex + idx + 1}
                         </td>
                         <td className="py-3 px-4">
                           <span className="font-bold text-on-surface block">
@@ -657,7 +671,7 @@ export default function PembayaranIuranPage() {
 
             {/* MOBILE CARD LIST (Layar < md) — TANPA PERLU GESER LAYAR KE KANAN */}
             <div className="md:hidden divide-y divide-outline-variant/30">
-              {filtered.map((m, idx) => {
+              {displayed.map((m, idx) => {
                 const paidCount = m.paidSessions.length;
                 const isFullPaid = paidCount >= monthlySessionCount;
                 const arrearsList = m.arrears || [];
@@ -669,7 +683,7 @@ export default function PembayaranIuranPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="font-extrabold text-sm text-on-surface">
-                          {idx + 1}. {m.fullName}
+                          {startIndex + idx + 1}. {m.fullName}
                         </p>
                         <p className="text-xs text-on-surface-variant">
                           Kelas <strong>{m.kelas || '-'}</strong> • {m.section} (
@@ -797,6 +811,102 @@ export default function PembayaranIuranPage() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* Kontrol Paginasi Siswa (Desktop & Mobile) */}
+            <div className="p-3 sm:p-4 bg-surface-container-low border-t border-outline-variant/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-bold text-on-surface-variant">
+              <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2.5">
+                <span>
+                  Menampilkan{' '}
+                  <span className="font-black text-on-surface">
+                    {totalItems === 0 ? 0 : startIndex + 1} - {endIndex}
+                  </span>{' '}
+                  dari <span className="font-black text-on-surface">{totalItems}</span> siswa
+                </span>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-outline-variant/60">|</span>
+                  <label htmlFor="pageSizeSelectIuran" className="text-on-surface-variant font-normal">
+                    Per hal:
+                  </label>
+                  <select
+                    id="pageSizeSelectIuran"
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-surface-container border border-outline-variant/60 rounded-lg px-2 py-1 text-xs font-black text-on-surface outline-none cursor-pointer focus:ring-1 focus:ring-amber-500"
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={-1}>Semua</option>
+                  </select>
+                </div>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="w-full sm:w-auto flex items-center justify-center sm:justify-end gap-1 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={safeCurrentPage <= 1}
+                    className="px-2 sm:px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-surface text-on-surface disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container transition-colors flex items-center gap-1 text-xs font-black cursor-pointer shadow-2xs"
+                    title="Halaman Sebelumnya"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+                    <span className="hidden sm:inline">Sebelumnya</span>
+                  </button>
+
+                  <div className="flex items-center gap-1 px-0.5">
+                    {Array.from({ length: totalPages }).map((_, i) => {
+                      const pageNum = i + 1;
+                      if (
+                        totalPages > 5 &&
+                        Math.abs(pageNum - safeCurrentPage) > 1 &&
+                        pageNum !== 1 &&
+                        pageNum !== totalPages
+                      ) {
+                        if (Math.abs(pageNum - safeCurrentPage) === 2) {
+                          return (
+                            <span key={pageNum} className="text-outline-variant px-0.5">
+                              ...
+                            </span>
+                          );
+                        }
+                        return null;
+                      }
+                      const isCurrent = pageNum === safeCurrentPage;
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`w-7 h-7 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                            isCurrent
+                              ? 'bg-primary text-on-primary shadow-xs'
+                              : 'bg-surface text-on-surface border border-outline-variant/50 hover:bg-surface-container'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safeCurrentPage >= totalPages}
+                    className="px-2 sm:px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-surface text-on-surface disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container transition-colors flex items-center gap-1 text-xs font-black cursor-pointer shadow-2xs"
+                    title="Halaman Berikutnya"
+                  >
+                    <span className="hidden sm:inline">Berikutnya</span>
+                    <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                  </button>
+                </div>
+              )}
             </div>
           </>
         )}

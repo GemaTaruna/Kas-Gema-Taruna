@@ -381,27 +381,29 @@ export default function TransparansiSiswaPage() {
               </div>
 
               {/* Pemilih Pertemuan Aktif (P1, P2, P3, dst.) */}
-              <div className="flex items-center gap-2 pt-1 border-t border-slate-200/80 overflow-x-auto pb-1">
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-200/80 overflow-x-auto pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 <span className="text-xs font-bold text-slate-500 shrink-0">
                   Sorot Pertemuan:
                 </span>
-                {sessions.map((ses) => {
-                  const isActive = ses.id === activeSessionId;
-                  return (
-                    <button
-                      key={ses.id}
-                      type="button"
-                      onClick={() => setActiveSessionId(ses.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-black shrink-0 transition-all cursor-pointer ${
-                        isActive
-                          ? 'bg-slate-900 text-white shadow-md scale-105 ring-2 ring-amber-400'
-                          : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
-                      }`}
-                    >
-                      {ses.id}
-                    </button>
-                  );
-                })}
+                <div className="flex items-center gap-1.5 shrink-0 py-0.5">
+                  {sessions.map((ses) => {
+                    const isActive = ses.id === activeSessionId;
+                    return (
+                      <button
+                        key={ses.id}
+                        type="button"
+                        onClick={() => setActiveSessionId(ses.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black shrink-0 transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-slate-900 text-white shadow-sm ring-2 ring-amber-400'
+                            : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
+                        }`}
+                      >
+                        {ses.id}
+                      </button>
+                    );
+                  })}
+                </div>
                 <span className="text-[11px] text-slate-400 ml-2 hidden sm:inline">
                   (Klik pertemuan untuk melihat siswa lunas di kartu atas)
                 </span>
@@ -463,7 +465,7 @@ export default function TransparansiSiswaPage() {
                         </div>
 
                         {/* Badges Pertemuan (Satu baris horizontal tidak turun ke bawah) */}
-                        <div className="flex items-center flex-nowrap gap-1.5 overflow-x-auto pb-1">
+                        <div className="flex items-center flex-nowrap gap-1.5 overflow-x-auto py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                           {sessions.map((ses) => {
                             const paid = (m.paidSessions || []).includes(ses.id);
                             return (
@@ -594,8 +596,8 @@ export default function TransparansiSiswaPage() {
                 </div>
 
                 {/* Kontrol Paginasi Siswa (Desktop & Mobile) */}
-                <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-bold text-slate-600">
-                  <div className="flex items-center gap-3">
+                <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-bold text-slate-600">
+                  <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2.5">
                     <span>
                       Menampilkan{' '}
                       <span className="font-black text-slate-900">
@@ -604,7 +606,7 @@ export default function TransparansiSiswaPage() {
                       dari <span className="font-black text-slate-900">{totalItems}</span> siswa
                     </span>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <span className="text-slate-400">|</span>
                       <label htmlFor="pageSizeSelect" className="text-slate-500 font-normal">
                         Per hal:
@@ -627,29 +629,30 @@ export default function TransparansiSiswaPage() {
                   </div>
 
                   {totalPages > 1 && (
-                    <div className="flex items-center gap-1">
+                    <div className="w-full sm:w-auto flex items-center justify-center sm:justify-end gap-1 flex-wrap">
                       <button
                         type="button"
                         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                         disabled={safeCurrentPage <= 1}
-                        className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors flex items-center gap-1 text-xs font-black cursor-pointer shadow-2xs"
+                        className="px-2 sm:px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors flex items-center gap-1 text-xs font-black cursor-pointer shadow-2xs"
+                        title="Halaman Sebelumnya"
                       >
                         <span className="material-symbols-outlined text-[16px]">chevron_left</span>
-                        <span>Sebelumnya</span>
+                        <span className="hidden sm:inline">Sebelumnya</span>
                       </button>
 
-                      <div className="flex items-center gap-1 px-1">
+                      <div className="flex items-center gap-1 px-0.5">
                         {Array.from({ length: totalPages }).map((_, i) => {
                           const pageNum = i + 1;
                           if (
-                            totalPages > 7 &&
-                            Math.abs(pageNum - safeCurrentPage) > 2 &&
+                            totalPages > 5 &&
+                            Math.abs(pageNum - safeCurrentPage) > 1 &&
                             pageNum !== 1 &&
                             pageNum !== totalPages
                           ) {
-                            if (Math.abs(pageNum - safeCurrentPage) === 3) {
+                            if (Math.abs(pageNum - safeCurrentPage) === 2) {
                               return (
-                                <span key={pageNum} className="text-slate-400 px-1">
+                                <span key={pageNum} className="text-slate-400 px-0.5">
                                   ...
                                 </span>
                               );
@@ -678,9 +681,10 @@ export default function TransparansiSiswaPage() {
                         type="button"
                         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                         disabled={safeCurrentPage >= totalPages}
-                        className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors flex items-center gap-1 text-xs font-black cursor-pointer shadow-2xs"
+                        className="px-2 sm:px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors flex items-center gap-1 text-xs font-black cursor-pointer shadow-2xs"
+                        title="Halaman Berikutnya"
                       >
-                        <span>Berikutnya</span>
+                        <span className="hidden sm:inline">Berikutnya</span>
                         <span className="material-symbols-outlined text-[16px]">chevron_right</span>
                       </button>
                     </div>
