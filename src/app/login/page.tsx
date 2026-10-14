@@ -341,7 +341,7 @@ export default function LoginPage() {
               <p>© 2026 Marching Band Gema Taruna. Dilindungi Hak Cipta.</p>
               <p>
                 <a
-                  href="https://www.instagram.com/novano007"
+                  href="https://www.tiktok.com/@novano007"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-bold text-amber-600 hover:text-amber-500 hover:underline transition"

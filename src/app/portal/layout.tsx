@@ -14,7 +14,7 @@ export default function PortalLayout({
         <div className="flex-1">{children}</div>
         <footer className="pb-24 pt-3 px-4 text-center text-xs text-on-surface-variant border-t border-outline-variant/40 bg-surface-container-lowest">
           <a
-            href="https://www.instagram.com/novano007"
+            href="https://www.tiktok.com/@novano007"
             target="_blank"
             rel="noopener noreferrer"
             className="font-bold text-secondary hover:underline"

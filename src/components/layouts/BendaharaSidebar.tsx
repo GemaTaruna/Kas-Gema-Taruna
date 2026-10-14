@@ -137,7 +137,7 @@ export default function BendaharaSidebar({ isOpen = false, onClose }: BendaharaS
 
           <div className="pt-1 text-center">
             <a
-              href="https://www.instagram.com/novano007"
+              href="https://www.tiktok.com/@novano007"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-1 text-xs font-bold text-secondary hover:underline transition"
