@@ -135,26 +135,8 @@ export default function SplashScreen() {
             onPlaying={handlePlaying}
             onEnded={dismissSplash}
             onError={dismissSplash}
-            style={
-              isMobileOrPortrait
-                ? {
-                    WebkitMaskImage:
-                      'linear-gradient(to bottom, transparent 0%, black 5%, black 95%, transparent 100%)',
-                    maskImage:
-                      'linear-gradient(to bottom, transparent 0%, black 5%, black 95%, transparent 100%)',
-                  }
-                : {
-                    WebkitMaskImage:
-                      'linear-gradient(to right, transparent 0%, black 7%, black 93%, transparent 100%)',
-                    maskImage:
-                      'linear-gradient(to right, transparent 0%, black 7%, black 93%, transparent 100%)',
-                  }
-            }
-            className={
-              isMobileOrPortrait
-                ? 'relative z-10 w-full h-full object-cover object-center block'
-                : 'relative z-10 w-full h-full object-contain object-center block'
-            }
+            style={undefined}
+            className="relative z-10 w-full h-full object-cover object-center block"
           />
         </>
       )}

@@ -500,11 +500,13 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
   // agar 100% akurat sesuai dengan data riil pembayaran anggota yang ada saat ini.
   const recalculateAllRecapTransactions = async (
     targetAngkatan?: AngkatanId,
-    customMembersList?: MemberItem[]
+    customMembersList?: MemberItem[],
+    customDuesNominal?: number
   ) => {
     const angkatan = targetAngkatan || activeAngkatan;
     const currentMemberList =
       customMembersList || membersByAngkatan[angkatan] || [];
+    const nominalToUse = customDuesNominal ?? duesNominal;
 
     const dateStatsMap: Record<
       string,
@@ -552,7 +554,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         if (!stats || stats.count === 0) {
           deadRecapIds.push(t.id);
         } else {
-          const totalRupiah = stats.count * duesNominal;
+          const totalRupiah = stats.count * nominalToUse;
           const breakdownStr = Object.entries(stats.breakdown)
             .map(([lbl, cnt]) => `${cnt}x ${lbl}`)
             .join(', ');
@@ -575,7 +577,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
 
       Object.entries(remainingStatsMap).forEach(([datePart, stats]) => {
         if (stats.count > 0) {
-          const totalRupiah = stats.count * duesNominal;
+          const totalRupiah = stats.count * nominalToUse;
           const breakdownStr = Object.entries(stats.breakdown)
             .map(([lbl, cnt]) => `${cnt}x ${lbl}`)
             .join(', ');
@@ -961,6 +963,111 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     fetchAndSyncSupabaseData();
   }, [defaultMonth]);
 
+  // Realtime: refresh otomatis ketika admin di perangkat lain mengubah transaksi atau data anggota
+  useEffect(() => {
+    let channel: ReturnType<ReturnType<typeof createClient>['channel']> | null = null;
+    try {
+      const supabase = createClient();
+      channel = supabase
+        .channel('kgt_realtime_global')
+        .on(
+          'postgres_changes' as any,
+          { event: '*', schema: 'public', table: 'kgt_transactions' },
+          () => {
+            // Ambil ulang seluruh transaksi dari cloud agar semua perangkat sinkron
+            (async () => {
+              try {
+                const { data: dbTx } = await (supabase as any)
+                  .from('kgt_transactions')
+                  .select('*')
+                  .order('created_at', { ascending: false });
+                if (dbTx) {
+                  const groupedTx: Record<AngkatanId, TransactionItem[]> = {
+                    '16': [], '17': [], '18': [], '19': [], '20': [], '21': [],
+                  };
+                  for (const a of ANGKATAN_LIST) {
+                    groupedTx[a] = dbTx
+                      .filter((t: any) => t.angkatan === a)
+                      .map((t: any) => ({
+                        id: t.id,
+                        angkatan: t.angkatan,
+                        referenceNo: t.reference_no,
+                        type: t.type,
+                        category: t.category,
+                        description: t.description,
+                        vendor: t.vendor || '-',
+                        amount: Number(t.amount),
+                        paymentMethod: t.payment_method || 'Tunai Kas',
+                        recordedBy: t.recorded_by || 'Admin',
+                        transactionDate: t.transaction_date,
+                      }));
+                  }
+                  setTxByAngkatan(groupedTx);
+                  try { localStorage.setItem('kgt_real_tx_v4', JSON.stringify(groupedTx)); } catch { /* ignore */ }
+                }
+              } catch { /* ignore */ }
+            })();
+          }
+        )
+        .on(
+          'postgres_changes' as any,
+          { event: '*', schema: 'public', table: 'kgt_members' },
+          () => {
+            // Ambil ulang data anggota dari cloud
+            (async () => {
+              try {
+                const { data: dbMembers } = await (supabase as any)
+                  .from('kgt_members')
+                  .select('*')
+                  .order('created_at', { ascending: true });
+                if (dbMembers) {
+                  const grouped: Record<AngkatanId, MemberItem[]> = {
+                    '16': [], '17': [], '18': [], '19': [], '20': [], '21': [],
+                  };
+                  for (const a of ANGKATAN_LIST) {
+                    const list = dbMembers.filter((m: any) => m.angkatan === a && m.member_code !== '__CONFIG__');
+                    if (list.length > 0) {
+                      grouped[a] = list.map((m: any) => {
+                        const { kelas, status } = decodeStatusField(m.status);
+                        const { allPaidKeys, paidSessionDates } = decodePaidData(m.paid_at, defaultMonth);
+                        return {
+                          id: m.id,
+                          angkatan: m.angkatan,
+                          memberCode: m.member_code,
+                          fullName: m.full_name,
+                          kelas,
+                          section: m.section || 'BRASS',
+                          instrument: m.instrument || 'Terompet',
+                          phone: m.phone || '',
+                          status,
+                          duesStatus: 'BELUM BAYAR',
+                          paidAt: m.paid_at || '[]',
+                          paidSessions: [],
+                          allPaidKeys,
+                          paidSessionDates,
+                          arrears: [],
+                          duesAmount: Number(m.dues_amount || 5000),
+                        };
+                      });
+                    }
+                  }
+                  setMembersByAngkatan(grouped);
+                  try { localStorage.setItem('kgt_real_members_v4', JSON.stringify(grouped)); } catch { /* ignore */ }
+                }
+              } catch { /* ignore */ }
+            })();
+          }
+        )
+        .subscribe();
+    } catch { /* ignore */ }
+
+    return () => {
+      if (channel) {
+        try { createClient().removeChannel(channel); } catch { /* ignore */ }
+      }
+    };
+  }, [defaultMonth]);
+
   // Fungsi manual untuk memaksa sinkronisasi data lokal ke Supabase Cloud
   const syncLocalToCloud = async (): Promise<{ ok: boolean; message: string }> => {
     try {
@@ -1191,6 +1298,12 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // ignore
     }
+    // Hitung ulang seluruh rekap langsung dengan nominal baru agar dashboard semua angkatan langsung akurat
+    setTimeout(() => {
+      ANGKATAN_LIST.forEach((a) => {
+        recalculateAllRecapTransactions(a, undefined, val);
+      });
+    }, 0);
   };
 
   const setWaTemplate = (val: string) => {

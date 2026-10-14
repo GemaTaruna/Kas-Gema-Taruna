@@ -268,19 +268,19 @@ export default function PengaturanPage() {
       )}
 
       <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Pengaturan Tarif Iuran Per Pertemuan */}
+        {/* Pengaturan Tarif Iuran Per Minggu */}
         <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/40 shadow-xs flex flex-col justify-between gap-4">
           <div className="space-y-3">
             <h2 className="text-base font-extrabold text-on-surface">
-              Tarif Iuran Per Pertemuan Latihan
+              Tarif Iuran Per Minggu Latihan
             </h2>
             <p className="text-xs text-on-surface-variant">
-              Tarif standar yang otomatis dicatat ke Pemasukan Kas setiap kali siswa ditandai <strong>Lunas</strong> pada sesi pertemuan latihan (default Rp 5.000 / pertemuan).
+              Tarif iuran yang dibayarkan <strong>setiap minggu</strong> oleh setiap siswa (default Rp 10.000 / minggu). Setiap kali siswa ditandai <strong>Lunas</strong> pada 1 sesi minggu, jumlah ini dicatat ke Pemasukan Kas.
             </p>
 
             <div>
               <label className="block text-xs font-bold text-on-surface mb-1">
-                Nominal Iuran per Pertemuan (Rp)
+                Nominal Iuran per Minggu (Rp)
               </label>
               <input
                 type="number"
@@ -294,15 +294,15 @@ export default function PengaturanPage() {
 
             <div className="p-3 rounded-xl bg-surface-container-low text-xs text-on-surface-variant space-y-1">
               <p>
-                • <strong>1x Pertemuan:</strong> {formatRupiah(Number(nominalInput) || 5000)}
+                • <strong>1 Minggu:</strong> {formatRupiah(Number(nominalInput) || 10000)}
               </p>
               <p>
-                • <strong>1 Minggu (2x Pertemuan):</strong>{' '}
-                {formatRupiah((Number(nominalInput) || 5000) * 2)}
+                • <strong>4 Minggu (1 Bulan):</strong>{' '}
+                {formatRupiah((Number(nominalInput) || 10000) * 4)}
               </p>
               <p>
-                • <strong>1 Bulan (8x Pertemuan):</strong>{' '}
-                {formatRupiah((Number(nominalInput) || 5000) * 8)}
+                • <strong>5 Minggu (Bulan padat):</strong>{' '}
+                {formatRupiah((Number(nominalInput) || 10000) * 5)}
               </p>
             </div>
           </div>
