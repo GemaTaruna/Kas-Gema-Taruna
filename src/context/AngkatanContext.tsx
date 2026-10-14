@@ -349,8 +349,8 @@ interface AngkatanContextValue {
   cloudStatus: CloudSyncStatus;
   syncLocalToCloud: () => Promise<{ ok: boolean; message: string }>;
   refreshFromCloud: () => Promise<void>;
-  duesNominal: number; // Default Rp 5.000 per pertemuan
-  setDuesNominal: (val: number) => void;
+  duesNominal: number; // Nominal iuran mingguan (default Rp 10.000)
+  setDuesNominal: (val: number) => Promise<void>;
   waTemplate: string;
   setWaTemplate: (val: string) => void;
   activeMonth: string; // 'YYYY-MM', e.g. '2026-10'
@@ -475,7 +475,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
   const [lockedAngkatan, setLockedAngkatan] = useState<AngkatanId | null>(null);
   const [activeAngkatan, setActiveAngkatanState] = useState<AngkatanId>('16');
   const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>('checking');
-  const [duesNominal, setDuesNominalState] = useState<number>(5000);
+  const [duesNominal, setDuesNominalState] = useState<number>(10000);
   const [waTemplate, setWaTemplateState] = useState<string>(DEFAULT_WA_TEMPLATE);
 
   const [activeMonth, setActiveMonthState] = useState<string>(defaultMonth);
@@ -761,7 +761,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         localStorage.getItem('kgt_dues_nominal_v4') ||
         localStorage.getItem('kgt_dues_nominal_v3');
       if (storedNominal) {
-        setDuesNominalState(Number(storedNominal) || 5000);
+        setDuesNominalState(Number(storedNominal) || 10000);
       }
       const storedWa =
         localStorage.getItem('kgt_wa_template_v4') ||
@@ -795,6 +795,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         setCloudStatus('connected');
 
         let membersLoaded: Record<AngkatanId, MemberItem[]> | null = null;
+        let cloudNominal: number | null = null;
 
         if (dbMembers) {
           const grouped: Record<AngkatanId, MemberItem[]> = {
@@ -817,14 +818,22 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
           for (const a of ANGKATAN_LIST) {
             const rawList = dbMembers.filter((m: any) => m.angkatan === a);
             const configRow = rawList.find((m: any) => m.member_code === '__CONFIG__');
-            if (configRow && configRow.paid_at) {
-              try {
-                const parsedCfg = JSON.parse(configRow.paid_at);
-                if (parsedCfg && typeof parsedCfg.monthCounts === 'object') {
-                  loadedCounts[a] = parsedCfg.monthCounts;
+            if (configRow) {
+              if (configRow.paid_at) {
+                try {
+                  const parsedCfg = JSON.parse(configRow.paid_at);
+                  if (parsedCfg && typeof parsedCfg.monthCounts === 'object') {
+                    loadedCounts[a] = parsedCfg.monthCounts;
+                  }
+                  if (parsedCfg && parsedCfg.duesNominal && Number(parsedCfg.duesNominal) > 0) {
+                    cloudNominal = Number(parsedCfg.duesNominal);
+                  }
+                } catch {
+                  // ignore
                 }
-              } catch {
-                // ignore
+              }
+              if (!cloudNominal && configRow.dues_amount && Number(configRow.dues_amount) > 0) {
+                cloudNominal = Number(configRow.dues_amount);
               }
             }
 
@@ -883,6 +892,15 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
                   duesAmount: Number(m.dues_amount || 5000),
                 };
               });
+            }
+          }
+
+          if (cloudNominal && cloudNominal > 0) {
+            setDuesNominalState(cloudNominal);
+            try {
+              localStorage.setItem('kgt_dues_nominal_v4', String(cloudNominal));
+            } catch {
+              // ignore
             }
           }
 
@@ -951,8 +969,9 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
           setTxByAngkatan(groupedTx);
           localStorage.setItem('kgt_real_tx_v4', JSON.stringify(groupedTx));
 
+          const nominalForRecap = cloudNominal || duesNominal || 10000;
           for (const a of ANGKATAN_LIST) {
-            await recalculateAllRecapTransactions(a, membersLoaded ? membersLoaded[a] : undefined);
+            await recalculateAllRecapTransactions(a, membersLoaded ? membersLoaded[a] : undefined, nominalForRecap);
           }
         }
       } catch {
@@ -963,108 +982,164 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     fetchAndSyncSupabaseData();
   }, [defaultMonth]);
 
-  // Realtime: refresh otomatis ketika admin di perangkat lain mengubah transaksi atau data anggota
+  // Live Sync Multi-Perangkat: Realtime WebSocket + Polling 3 detik + Focus Listener
+  // Menjamin setiap perubahan transaksi/pembayaran di HP/PC langsung muncul di Superadmin & Siswa tanpa refresh manual
   useEffect(() => {
     let channel: ReturnType<ReturnType<typeof createClient>['channel']> | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let isFetching = false;
+
+    const pullLatestData = async () => {
+      if (isFetching) return;
+      isFetching = true;
+      try {
+        const supabase = createClient();
+        const [{ data: dbMembers }, { data: dbTx }] = await Promise.all([
+          (supabase as any).from('kgt_members').select('*').order('created_at', { ascending: true }),
+          (supabase as any).from('kgt_transactions').select('*').order('created_at', { ascending: false }),
+        ]);
+
+        if (dbMembers) {
+          let foundNominal: number | null = null;
+          const loadedCounts: Record<AngkatanId, Record<string, number>> = {
+            '16': {}, '17': {}, '18': {}, '19': {}, '20': {}, '21': {},
+          };
+          const grouped: Record<AngkatanId, MemberItem[]> = {
+            '16': [], '17': [], '18': [], '19': [], '20': [], '21': [],
+          };
+
+          for (const a of ANGKATAN_LIST) {
+            const rawList = dbMembers.filter((m: any) => m.angkatan === a);
+            const configRow = rawList.find((m: any) => m.member_code === '__CONFIG__');
+            if (configRow) {
+              if (configRow.paid_at) {
+                try {
+                  const parsedCfg = JSON.parse(configRow.paid_at);
+                  if (parsedCfg && typeof parsedCfg.monthCounts === 'object') {
+                    loadedCounts[a] = parsedCfg.monthCounts;
+                  }
+                  if (parsedCfg && parsedCfg.duesNominal && Number(parsedCfg.duesNominal) > 0) {
+                    foundNominal = Number(parsedCfg.duesNominal);
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+              if (!foundNominal && configRow.dues_amount && Number(configRow.dues_amount) > 0) {
+                foundNominal = Number(configRow.dues_amount);
+              }
+            }
+
+            const list = rawList.filter((m: any) => m.member_code !== '__CONFIG__');
+            if (list.length > 0) {
+              grouped[a] = list.map((m: any) => {
+                const { kelas, status } = decodeStatusField(m.status);
+                const { allPaidKeys, paidSessionDates } = decodePaidData(m.paid_at, defaultMonth);
+                return {
+                  id: m.id,
+                  angkatan: m.angkatan,
+                  memberCode: m.member_code,
+                  fullName: m.full_name,
+                  kelas,
+                  section: m.section || 'BRASS',
+                  instrument: m.instrument || 'Terompet',
+                  phone: m.phone || '',
+                  status,
+                  duesStatus: (allPaidKeys || []).length > 0 ? 'LUNAS' : 'BELUM BAYAR',
+                  paidAt: m.paid_at || '[]',
+                  paidSessions: [],
+                  allPaidKeys,
+                  paidSessionDates,
+                  arrears: [],
+                  duesAmount: Number(m.dues_amount || foundNominal || 10000),
+                };
+              });
+            }
+          }
+
+          if (foundNominal && foundNominal > 0) {
+            setDuesNominalState(foundNominal);
+            try { localStorage.setItem('kgt_dues_nominal_v4', String(foundNominal)); } catch {}
+          }
+
+          setMembersByAngkatan(grouped);
+          try { localStorage.setItem('kgt_real_members_v4', JSON.stringify(grouped)); } catch {}
+
+          setMonthCountsByAngkatan((prev) => {
+            const merged = { ...prev };
+            ANGKATAN_LIST.forEach((a) => {
+              merged[a] = { ...(prev[a] || {}), ...(loadedCounts[a] || {}) };
+            });
+            try { localStorage.setItem('kgt_month_counts_v4', JSON.stringify(merged)); } catch {}
+            return merged;
+          });
+        }
+
+        if (dbTx) {
+          const groupedTx: Record<AngkatanId, TransactionItem[]> = {
+            '16': [], '17': [], '18': [], '19': [], '20': [], '21': [],
+          };
+          for (const a of ANGKATAN_LIST) {
+            groupedTx[a] = dbTx
+              .filter((t: any) => t.angkatan === a)
+              .map((t: any) => ({
+                id: t.id,
+                angkatan: t.angkatan,
+                referenceNo: t.reference_no,
+                type: t.type,
+                category: t.category,
+                description: t.description,
+                vendor: t.vendor || '-',
+                amount: Number(t.amount),
+                paymentMethod: t.payment_method || 'Tunai Kas',
+                recordedBy: t.recorded_by || 'Admin',
+                transactionDate: t.transaction_date,
+              }));
+          }
+          setTxByAngkatan(groupedTx);
+          try { localStorage.setItem('kgt_real_tx_v4', JSON.stringify(groupedTx)); } catch {}
+        }
+      } catch {
+        // network error / offline
+      } finally {
+        isFetching = false;
+      }
+    };
+
     try {
       const supabase = createClient();
       channel = supabase
         .channel('kgt_realtime_global')
-        .on(
-          'postgres_changes' as any,
-          { event: '*', schema: 'public', table: 'kgt_transactions' },
-          () => {
-            // Ambil ulang seluruh transaksi dari cloud agar semua perangkat sinkron
-            (async () => {
-              try {
-                const { data: dbTx } = await (supabase as any)
-                  .from('kgt_transactions')
-                  .select('*')
-                  .order('created_at', { ascending: false });
-                if (dbTx) {
-                  const groupedTx: Record<AngkatanId, TransactionItem[]> = {
-                    '16': [], '17': [], '18': [], '19': [], '20': [], '21': [],
-                  };
-                  for (const a of ANGKATAN_LIST) {
-                    groupedTx[a] = dbTx
-                      .filter((t: any) => t.angkatan === a)
-                      .map((t: any) => ({
-                        id: t.id,
-                        angkatan: t.angkatan,
-                        referenceNo: t.reference_no,
-                        type: t.type,
-                        category: t.category,
-                        description: t.description,
-                        vendor: t.vendor || '-',
-                        amount: Number(t.amount),
-                        paymentMethod: t.payment_method || 'Tunai Kas',
-                        recordedBy: t.recorded_by || 'Admin',
-                        transactionDate: t.transaction_date,
-                      }));
-                  }
-                  setTxByAngkatan(groupedTx);
-                  try { localStorage.setItem('kgt_real_tx_v4', JSON.stringify(groupedTx)); } catch { /* ignore */ }
-                }
-              } catch { /* ignore */ }
-            })();
-          }
-        )
-        .on(
-          'postgres_changes' as any,
-          { event: '*', schema: 'public', table: 'kgt_members' },
-          () => {
-            // Ambil ulang data anggota dari cloud
-            (async () => {
-              try {
-                const { data: dbMembers } = await (supabase as any)
-                  .from('kgt_members')
-                  .select('*')
-                  .order('created_at', { ascending: true });
-                if (dbMembers) {
-                  const grouped: Record<AngkatanId, MemberItem[]> = {
-                    '16': [], '17': [], '18': [], '19': [], '20': [], '21': [],
-                  };
-                  for (const a of ANGKATAN_LIST) {
-                    const list = dbMembers.filter((m: any) => m.angkatan === a && m.member_code !== '__CONFIG__');
-                    if (list.length > 0) {
-                      grouped[a] = list.map((m: any) => {
-                        const { kelas, status } = decodeStatusField(m.status);
-                        const { allPaidKeys, paidSessionDates } = decodePaidData(m.paid_at, defaultMonth);
-                        return {
-                          id: m.id,
-                          angkatan: m.angkatan,
-                          memberCode: m.member_code,
-                          fullName: m.full_name,
-                          kelas,
-                          section: m.section || 'BRASS',
-                          instrument: m.instrument || 'Terompet',
-                          phone: m.phone || '',
-                          status,
-                          duesStatus: 'BELUM BAYAR',
-                          paidAt: m.paid_at || '[]',
-                          paidSessions: [],
-                          allPaidKeys,
-                          paidSessionDates,
-                          arrears: [],
-                          duesAmount: Number(m.dues_amount || 5000),
-                        };
-                      });
-                    }
-                  }
-                  setMembersByAngkatan(grouped);
-                  try { localStorage.setItem('kgt_real_members_v4', JSON.stringify(grouped)); } catch { /* ignore */ }
-                }
-              } catch { /* ignore */ }
-            })();
-          }
-        )
+        .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'kgt_transactions' }, () => {
+          pullLatestData();
+        })
+        .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'kgt_members' }, () => {
+          pullLatestData();
+        })
         .subscribe();
-    } catch { /* ignore */ }
+    } catch {
+      // ignore
+    }
+
+    pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        pullLatestData();
+      }
+    }, 3000);
+
+    const handleFocus = () => {
+      pullLatestData();
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
 
     return () => {
       if (channel) {
-        try { createClient().removeChannel(channel); } catch { /* ignore */ }
+        try { createClient().removeChannel(channel); } catch {}
       }
+      if (pollInterval) clearInterval(pollInterval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
     };
   }, [defaultMonth]);
 
@@ -1172,6 +1247,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
       setCloudStatus('connected');
 
       let membersLoaded: Record<AngkatanId, MemberItem[]> | null = null;
+      let cloudNominal: number | null = null;
 
       if (dbMembers) {
         const grouped: Record<AngkatanId, MemberItem[]> = {
@@ -1194,14 +1270,22 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         for (const a of ANGKATAN_LIST) {
           const rawList = dbMembers.filter((m: any) => m.angkatan === a);
           const configRow = rawList.find((m: any) => m.member_code === '__CONFIG__');
-          if (configRow && configRow.paid_at) {
-            try {
-              const parsedCfg = JSON.parse(configRow.paid_at);
-              if (parsedCfg && typeof parsedCfg.monthCounts === 'object') {
-                loadedCounts[a] = parsedCfg.monthCounts;
+          if (configRow) {
+            if (configRow.paid_at) {
+              try {
+                const parsedCfg = JSON.parse(configRow.paid_at);
+                if (parsedCfg && typeof parsedCfg.monthCounts === 'object') {
+                  loadedCounts[a] = parsedCfg.monthCounts;
+                }
+                if (parsedCfg && parsedCfg.duesNominal && Number(parsedCfg.duesNominal) > 0) {
+                  cloudNominal = Number(parsedCfg.duesNominal);
+                }
+              } catch {
+                // ignore
               }
-            } catch {
-              // ignore
+            }
+            if (!cloudNominal && configRow.dues_amount && Number(configRow.dues_amount) > 0) {
+              cloudNominal = Number(configRow.dues_amount);
             }
           }
 
@@ -1229,9 +1313,18 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
                 allPaidKeys,
                 paidSessionDates,
                 arrears: [],
-                duesAmount: Number(m.dues_amount || 5000),
+                duesAmount: Number(m.dues_amount || cloudNominal || 10000),
               };
             });
+          }
+        }
+
+        if (cloudNominal && cloudNominal > 0) {
+          setDuesNominalState(cloudNominal);
+          try {
+            localStorage.setItem('kgt_dues_nominal_v4', String(cloudNominal));
+          } catch {
+            // ignore
           }
         }
 
@@ -1282,8 +1375,9 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
         setTxByAngkatan(groupedTx);
         localStorage.setItem('kgt_real_tx_v4', JSON.stringify(groupedTx));
 
+        const nominalForRecap = cloudNominal || duesNominal || 10000;
         for (const a of ANGKATAN_LIST) {
-          await recalculateAllRecapTransactions(a, membersLoaded ? membersLoaded[a] : undefined);
+          await recalculateAllRecapTransactions(a, membersLoaded ? membersLoaded[a] : undefined, nominalForRecap);
         }
       }
     } catch {
@@ -1291,19 +1385,71 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const setDuesNominal = (val: number) => {
+  const setDuesNominal = async (val: number) => {
     setDuesNominalState(val);
     try {
       localStorage.setItem('kgt_dues_nominal_v4', String(val));
     } catch {
       // ignore
     }
+
+    // Simpan ke Supabase Cloud pada row __CONFIG__ di semua angkatan agar semua perangkat otomatis sinkron
+    try {
+      const supabase = createClient();
+      for (const a of ANGKATAN_LIST) {
+        const { data: existingCfg } = await (supabase as any)
+          .from('kgt_members')
+          .select('id, paid_at')
+          .eq('angkatan', a)
+          .eq('member_code', '__CONFIG__')
+          .maybeSingle();
+
+        let monthCounts = monthCountsByAngkatan[a] || {};
+        if (existingCfg?.paid_at) {
+          try {
+            const p = JSON.parse(existingCfg.paid_at);
+            if (p.monthCounts) monthCounts = p.monthCounts;
+          } catch {
+            // ignore
+          }
+        }
+
+        const configPayload = JSON.stringify({
+          monthCounts,
+          duesNominal: val,
+        });
+
+        if (existingCfg?.id) {
+          await (supabase as any)
+            .from('kgt_members')
+            .update({
+              dues_amount: val,
+              paid_at: configPayload,
+            })
+            .eq('id', existingCfg.id);
+        } else {
+          await (supabase as any).from('kgt_members').insert({
+            id: generateUUID(),
+            angkatan: a,
+            member_code: '__CONFIG__',
+            full_name: 'SYSTEM CONFIG',
+            section: 'BRASS',
+            instrument: 'Config',
+            status: 'System',
+            dues_status: 'CONFIG',
+            paid_at: configPayload,
+            dues_amount: val,
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     // Hitung ulang seluruh rekap langsung dengan nominal baru agar dashboard semua angkatan langsung akurat
-    setTimeout(() => {
-      ANGKATAN_LIST.forEach((a) => {
-        recalculateAllRecapTransactions(a, undefined, val);
-      });
-    }, 0);
+    for (const a of ANGKATAN_LIST) {
+      await recalculateAllRecapTransactions(a, undefined, val);
+    }
   };
 
   const setWaTemplate = (val: string) => {

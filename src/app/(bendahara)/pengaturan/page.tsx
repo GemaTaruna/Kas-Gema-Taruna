@@ -17,7 +17,7 @@ create table if not exists public.kgt_members (
   status text not null default 'Aktif',
   dues_status text not null default 'BELUM BAYAR',
   paid_at text default '[]',
-  dues_amount bigint not null default 5000,
+  dues_amount bigint not null default 10000,
   created_at timestamptz not null default now()
 );
 
@@ -43,7 +43,10 @@ drop policy if exists "Public access kgt_members" on public.kgt_members;
 create policy "Public access kgt_members" on public.kgt_members for all using (true) with check (true);
 
 drop policy if exists "Public access kgt_transactions" on public.kgt_transactions;
-create policy "Public access kgt_transactions" on public.kgt_transactions for all using (true) with check (true);`;
+create policy "Public access kgt_transactions" on public.kgt_transactions for all using (true) with check (true);
+
+-- Aktifkan Realtime otomatis agar setiap perubahan langsung sinkron di semua perangkat tanpa refresh
+alter publication supabase_realtime add table public.kgt_members, public.kgt_transactions;`;
 
 export default function PengaturanPage() {
   const {
@@ -98,11 +101,11 @@ export default function PengaturanPage() {
     setTimeout(() => setSyncMessage(''), 6000);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const num = Number(nominalInput.replace(/[^0-9]/g, ''));
     if (num > 0) {
-      setDuesNominal(num);
+      await setDuesNominal(num);
     }
     if (waInput.trim()) {
       setWaTemplate(waInput.trim());
