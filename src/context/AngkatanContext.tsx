@@ -8,11 +8,11 @@ export type AppRole = 'superadmin' | 'admin_angkatan' | 'siswa';
 export type CloudSyncStatus = 'checking' | 'connected' | 'table_missing';
 
 export const SECTION_OPTIONS: Record<string, string[]> = {
+  'LEADERSHIP': ['Field Commander', 'Stickmaster Taruna', 'Stickmaster Taruni'],
   'BRASS': ['Terompet', 'Bariton'],
   'PERCUSSION': ['Bass Drum', 'Snare Drum', 'Tenor', 'Simbal', 'Quarto'],
   'PIT INSTRUMENT': ['Belira'],
   'COLOR GUARD': ['Bendera'],
-  'LEADERSHIP': ['Field Commander', 'Stickmaster Taruna', 'Stickmaster Taruni'],
 };
 
 export const SECTION_NAMES = Object.keys(SECTION_OPTIONS);
@@ -119,6 +119,87 @@ export interface MemberItem {
   paidSessionDates: Record<string, string>; // Map '2026-10:P1' -> '2026-10-06'
   arrears: ArrearItem[]; // Daftar tunggakan dari bulan-bulan sebelumnya
   duesAmount: number;
+}
+
+export const SECTION_ORDER: Record<string, number> = {
+  'LEADERSHIP': 1,
+  'FIELD COMMANDER': 1,
+  'STICKMASTER': 1,
+  'BRASS': 2,
+  'PERCUSSION': 3,
+  'PERKUSI': 3,
+  'BATTERY': 3,
+  'PIT INSTRUMENT': 4,
+  'PIT': 4,
+  'COLOR GUARD': 5,
+  'COLOUR GUARD': 5,
+  'CG': 5,
+};
+
+export function getSectionPriority(sec?: string | null): number {
+  const upper = (sec || '').trim().toUpperCase();
+  for (const [key, priority] of Object.entries(SECTION_ORDER)) {
+    if (upper.includes(key) || key.includes(upper)) {
+      return priority;
+    }
+  }
+  return 99;
+}
+
+export function normalizeSectionName(sec?: string | null): string {
+  const upper = (sec || '').trim().toUpperCase();
+  if (upper.includes('LEADERSHIP') || upper.includes('COMMANDER') || upper.includes('STICKMASTER')) {
+    return 'LEADERSHIP';
+  }
+  if (upper.includes('BRASS') || upper.includes('TIUP')) {
+    return 'BRASS';
+  }
+  if (upper.includes('PERCUSSION') || upper.includes('PERKUSI') || upper.includes('BATTERY')) {
+    return 'PERCUSSION';
+  }
+  if (upper.includes('PIT')) {
+    return 'PIT INSTRUMENT';
+  }
+  if (upper.includes('COLOR') || upper.includes('COLOUR') || upper.includes('GUARD')) {
+    return 'COLOR GUARD';
+  }
+  return upper;
+}
+
+// Mengurutkan anggota dengan urutan hierarki Marching Band: Seksi -> Alat -> Nama Siswa (A-Z)
+export function sortMembers(list: MemberItem[]): MemberItem[] {
+  return [...list].sort((a, b) => {
+    // 1. Urut Seksi (Leadership -> Brass -> Percussion -> Pit Instrument -> Color Guard -> Lainnya)
+    const prioA = getSectionPriority(a.section);
+    const prioB = getSectionPriority(b.section);
+    if (prioA !== prioB) {
+      return prioA - prioB;
+    }
+    const normSecA = normalizeSectionName(a.section);
+    const normSecB = normalizeSectionName(b.section);
+    if (normSecA !== normSecB) {
+      return normSecA.localeCompare(normSecB, 'id');
+    }
+
+    // 2. Urut Alat (A - Z)
+    const instA = (a.instrument || '').trim();
+    const instB = (b.instrument || '').trim();
+    const instComp = instA.localeCompare(instB, 'id', { sensitivity: 'base' });
+    if (instComp !== 0) {
+      return instComp;
+    }
+
+    // 3. Urut Nama Siswa (A - Z)
+    const nameA = (a.fullName || '').trim();
+    const nameB = (b.fullName || '').trim();
+    const nameComp = nameA.localeCompare(nameB, 'id', { sensitivity: 'base' });
+    if (nameComp !== 0) {
+      return nameComp;
+    }
+
+    // Fallback stabil: urut kode anggota (MB16-01 ...)
+    return (a.memberCode || '').localeCompare(b.memberCode || '', 'id');
+  });
 }
 
 export interface TransactionItem {
@@ -882,7 +963,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
                 ...item,
                 id: ensureUUID(item.id),
               }));
-              grouped[a] = updatedLocalList;
+              grouped[a] = sortMembers(updatedLocalList);
               try {
                 const dbPayload = updatedLocalList.map((item) => ({
                   id: item.id,
@@ -902,7 +983,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
                 // saved locally
               }
             } else if (list.length > 0) {
-              grouped[a] = list.map((m: any) => {
+              grouped[a] = sortMembers(list.map((m: any) => {
                 const { kelas, status } = decodeStatusField(m.status);
                 const { allPaidKeys, paidSessionDates } = decodePaidData(
                   m.paid_at,
@@ -926,7 +1007,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
                   arrears: [],
                   duesAmount: Number(m.dues_amount || 5000),
                 };
-              });
+              }));
             }
           }
 
@@ -1069,7 +1150,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
 
             const list = rawList.filter((m: any) => m.member_code !== '__CONFIG__');
             if (list.length > 0) {
-              grouped[a] = list.map((m: any) => {
+              grouped[a] = sortMembers(list.map((m: any) => {
                 const { kelas, status } = decodeStatusField(m.status);
                 const { allPaidKeys, paidSessionDates } = decodePaidData(m.paid_at, defaultMonth);
                 return {
@@ -1090,7 +1171,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
                   arrears: [],
                   duesAmount: Number(m.dues_amount || foundNominal || 10000),
                 };
-              });
+              }));
             }
           }
 
@@ -1339,7 +1420,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
 
           const list = rawList.filter((m: any) => m.member_code !== '__CONFIG__');
           if (list.length > 0) {
-            grouped[a] = list.map((m: any) => {
+            grouped[a] = sortMembers(list.map((m: any) => {
               const { kelas, status } = decodeStatusField(m.status);
               const { allPaidKeys, paidSessionDates } = decodePaidData(
                 m.paid_at,
@@ -1363,7 +1444,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
                 arrears: [],
                 duesAmount: Number(m.dues_amount || cloudNominal || 10000),
               };
-            });
+            }));
           }
         }
 
@@ -1770,37 +1851,43 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     });
   }, [rawMembers, activeMonth, activeAngkatan, monthCountsByAngkatan]);
 
-  const currentMembers: MemberItem[] = rawMembers.map((m) => {
-    const allKeys = m.allPaidKeys || [];
-    const monthPrefix = `${activeMonth}:`;
-    const paidInActiveMonth = allKeys
-      .filter((k) => k.startsWith(monthPrefix))
-      .map((k) => k.slice(monthPrefix.length));
+  const currentMembers: MemberItem[] = React.useMemo(() => {
+    const list: MemberItem[] = rawMembers.map((m): MemberItem => {
+      const allKeys = m.allPaidKeys || [];
+      const monthPrefix = `${activeMonth}:`;
+      const paidInActiveMonth = allKeys
+        .filter((k) => k.startsWith(monthPrefix))
+        .map((k) => k.slice(monthPrefix.length));
 
-    const memberArrears: ArrearItem[] = heldPastSessionKeys
-      .filter((pastKey) => !allKeys.includes(pastKey))
-      .map((pastKey) => {
-        const { monthKey, sessionId } = parseSessionKey(pastKey, activeMonth);
-        const mShort = formatMonthShort(monthKey);
-        return {
-          fullKey: pastKey,
-          monthKey,
-          monthLabel: formatMonthLabel(monthKey),
-          monthShort: mShort,
-          sessionId,
-          shortLabel: `${mShort}-${sessionId}`,
-        };
-      });
+      const memberArrears: ArrearItem[] = heldPastSessionKeys
+        .filter((pastKey) => !allKeys.includes(pastKey))
+        .map((pastKey) => {
+          const { monthKey, sessionId } = parseSessionKey(pastKey, activeMonth);
+          const mShort = formatMonthShort(monthKey);
+          return {
+            fullKey: pastKey,
+            monthKey,
+            monthLabel: formatMonthLabel(monthKey),
+            monthShort: mShort,
+            sessionId,
+            shortLabel: `${mShort}-${sessionId}`,
+          };
+        });
 
-    return {
-      ...m,
-      paidSessions: paidInActiveMonth,
-      arrears: memberArrears,
-      duesStatus: paidInActiveMonth.includes(activeSessionId)
+      const duesStatus: 'LUNAS' | 'BELUM BAYAR' = paidInActiveMonth.includes(activeSessionId)
         ? 'LUNAS'
-        : 'BELUM BAYAR',
-    };
-  });
+        : 'BELUM BAYAR';
+
+      return {
+        ...m,
+        paidSessions: paidInActiveMonth,
+        arrears: memberArrears,
+        duesStatus,
+      };
+    });
+
+    return sortMembers(list);
+  }, [rawMembers, activeMonth, heldPastSessionKeys, activeSessionId]);
 
   const currentTransactions = txByAngkatan[activeAngkatan] || [];
 
@@ -2034,7 +2121,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     setMembersByAngkatan((prev) => {
       const updated = {
         ...prev,
-        [activeAngkatan]: [...(prev[activeAngkatan] || []), newMember],
+        [activeAngkatan]: sortMembers([...(prev[activeAngkatan] || []), newMember]),
       };
       localStorage.setItem('kgt_real_members_v4', JSON.stringify(updated));
       return updated;
@@ -2111,7 +2198,7 @@ export function AngkatanProvider({ children }: { children: React.ReactNode }) {
     setMembersByAngkatan((prev) => {
       const updated = {
         ...prev,
-        [activeAngkatan]: [...(prev[activeAngkatan] || []), ...newItems],
+        [activeAngkatan]: sortMembers([...(prev[activeAngkatan] || []), ...newItems]),
       };
       localStorage.setItem('kgt_real_members_v4', JSON.stringify(updated));
       return updated;
